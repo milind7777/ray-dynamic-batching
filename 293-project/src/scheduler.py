@@ -888,11 +888,8 @@ class NexusScheduler:
         
 
 
-import curses
-from curses.textpad import Textbox, rectangle
-
 class MetricsDisplay:
-    """Real-time display of SLO metrics for all model queues in a separate window"""
+    """Simple console-based display of SLO metrics for all model queues"""
     def __init__(self, update_interval: float = 1.0):
         self.update_interval = update_interval
         self.stop_display = False
@@ -903,7 +900,7 @@ class MetricsDisplay:
         """Start metrics display thread"""
         self.stop_display = False
         self.display_thread = Thread(
-            target=self._curses_display_loop, 
+            target=self._console_display_loop, 
             args=(request_queues,),
             daemon=True
         )
@@ -915,100 +912,46 @@ class MetricsDisplay:
         if self.display_thread:
             self.display_thread.join()
             
-    def _curses_display_loop(self, request_queues: Dict[str, RequestQueue]):
-        """Main display loop using curses for separate window"""
-        def run_display(stdscr):
-            # Set up colors
-            curses.start_color()
-            curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-            curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-            curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
+    def _console_display_loop(self, request_queues: Dict[str, RequestQueue]):
+        """Main display loop using simple console output"""
+        while not self.stop_display:
+            # Clear screen using ANSI escape codes
+            print("\033[2J\033[H", end="")
             
-            # Hide cursor
-            curses.curs_set(0)
+            print("=== Real-time SLO Metrics ===")
+            print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print("=" * 50)
             
-            while not self.stop_display:
-                stdscr.clear()
-                height, width = stdscr.getmaxyx()
+            for model_name, queue in request_queues.items():
+                stats = queue.get_stats()
+                slo_target = queue.slo_target
                 
-                # Display header
-                header = "=== Real-time SLO Metrics ==="
-                timestamp = f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                stdscr.addstr(0, (width - len(header)) // 2, header)
-                stdscr.addstr(1, (width - len(timestamp)) // 2, timestamp)
-                stdscr.addstr(2, 0, "=" * width)
+                # Calculate SLO compliance
+                compliance = 100.0
+                if stats['total_requests'] > 0:
+                    compliance = ((stats['total_requests'] - stats['slo_violations']) / 
+                                stats['total_requests'] * 100)
                 
-                current_row = 3
+                print(f"\nModel: {model_name}")
+                print("-" * 40)
+                print(f"  SLO Target: {slo_target}ms")
+                print(f"  Queue Size: {stats['queue_size']}")
+                print(f"  Total Requests: {stats['total_requests']}")
+                print(f"  Dropped Requests: {stats['dropped_requests']}")
+                print(f"  SLO Violations: {stats['slo_violations']}")
+                print(f"  SLO Compliance: {compliance:.2f}%")
+                print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
+                print(f"  P95 Latency: {stats['p95_latency']:.2f}ms")
                 
-                # Display metrics for each model
-                for model_name, queue in request_queues.items():
-                    if current_row >= height - 5:  # Reserve space for footer
-                        break
-                        
-                    stats = queue.get_stats()
-                    slo_target = queue.slo_target
-                    
-                    # Calculate SLO compliance
-                    compliance = 100.0
-                    if stats['total_requests'] > 0:
-                        compliance = ((stats['total_requests'] - stats['slo_violations']) / 
-                                    stats['total_requests'] * 100)
-                    
-                    # Determine status colors
-                    queue_status_color = (curses.color_pair(1) if stats['queue_size'] < queue.queue.maxsize * 0.8 
-                                        else curses.color_pair(3))
-                    slo_status_color = (curses.color_pair(1) if compliance >= 95 
-                                      else curses.color_pair(2) if compliance >= 90 
-                                      else curses.color_pair(3))
-                    
-                    # Display model metrics
-                    stdscr.addstr(current_row, 2, f"Model: {model_name}")
-                    current_row += 1
-                    stdscr.addstr(current_row, 2, "-" * (width - 4))
-                    current_row += 1
-                    
-                    metrics = [
-                        f"SLO Target: {slo_target}ms",
-                        f"Queue Size: {stats['queue_size']}",
-                        f"Total Requests: {stats['total_requests']}",
-                        f"Dropped Requests: {stats['dropped_requests']}",
-                        f"SLO Violations: {stats['slo_violations']}",
-                        f"SLO Compliance: {compliance:.2f}%",
-                        f"Average Latency: {stats['avg_latency']:.2f}ms",
-                        f"P95 Latency: {stats['p95_latency']:.2f}ms"
-                    ]
-                    
-                    for metric in metrics:
-                        stdscr.addstr(current_row, 4, metric)
-                        current_row += 1
-                    
-                    # Status indicators
-                    stdscr.addstr(current_row, 4, "Queue Status: ")
-                    stdscr.addstr("●", queue_status_color)
-                    stdscr.addstr("  SLO Status: ")
-                    stdscr.addstr("●", slo_status_color)
-                    current_row += 2
-                
-                # Footer
-                footer_row = height - 3
-                stdscr.addstr(footer_row, 0, "=" * width)
-                legend = "● Good  ● Warning  ● Critical"
-                stdscr.addstr(footer_row + 1, 2, legend[0], curses.color_pair(1))
-                stdscr.addstr(legend[1:7])
-                stdscr.addstr(legend[7], curses.color_pair(2))
-                stdscr.addstr(legend[8:16])
-                stdscr.addstr(legend[16], curses.color_pair(3))
-                stdscr.addstr(legend[17:])
-                
-                stdscr.refresh()
-                time.sleep(self.update_interval)
-        
-        try:
-            curses.wrapper(run_display)
-        except KeyboardInterrupt:
-            self.stop_display = True
-        except Exception as e:
-            logging.error(f"Error in metrics display: {e}")
+                # Simple status indicators
+                queue_status = "✓" if stats['queue_size'] < queue.queue.maxsize * 0.8 else "!"
+                slo_status = "✓" if compliance >= 95 else "!" if compliance >= 90 else "✗"
+                print(f"  Queue Status: {queue_status}  SLO Status: {slo_status}")
+            
+            print("\n" + "=" * 50)
+            print("Status: ✓ Good  ! Warning  ✗ Critical")
+            
+            time.sleep(self.update_interval)
 
 def main():
     """
