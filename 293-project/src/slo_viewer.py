@@ -9,6 +9,7 @@ from collections import defaultdict
 
 class SLOViewer:
     def __init__(self):
+        ray.init(address='auto')
         self.model_map = {
             hash('vit') % 1000: ('vit', 50),
             hash('resnet') % 1000: ('resnet', 200),
@@ -176,6 +177,7 @@ def display_monitor(stdscr, viewer):
 
 def main():
     try:
+        viewer = SLOViewer()
         # Find the SLO tracker by searching actors
         actors = ray.state.actors()
         slo_tracker_id = None
@@ -192,7 +194,6 @@ def main():
         queue = ray.get(slo_tracker.get_queue.remote())
             
 
-        viewer = SLOViewer()
         curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer))
     except KeyboardInterrupt:
         print("\nExiting...")
