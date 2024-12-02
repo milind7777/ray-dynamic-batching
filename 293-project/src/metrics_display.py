@@ -8,7 +8,7 @@ def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def display_metrics():
-    """Display metrics from shared file"""
+    """Display metrics from shared file with enhanced debugging"""
     metrics_file = "metrics.json"
     
     while True:
@@ -35,6 +35,7 @@ def display_metrics():
                     print(f"  Dropped Requests: {stats['dropped_requests']:,}")
                     print(f"  SLO Violations: {violations:,}")
                     print(f"  SLO Compliance: {compliance:.2f}%")
+                    print(f"  Last Latency: {stats.get('last_latency', 0):.2f}ms")
                     print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
                     print(f"  P95 Latency: {stats['p95_latency']:.2f}ms")
                     print(f"  P99 Latency: {stats['p99_latency']:.2f}ms")

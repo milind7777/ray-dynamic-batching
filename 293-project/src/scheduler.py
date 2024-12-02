@@ -209,12 +209,14 @@ class RequestQueue:
 
         self.dropped_requests = 0
 
+        # Atomic metrics counter that will be shared
         self.metrics = {
             'total_requests': 0,
             'dropped_requests': 0,
             'slo_violations': 0,
-            'latencies': deque(maxlen=1000),
-            'queue_size': 0
+            'latencies': [],  # Change to list for better JSON serialization
+            'queue_size': 0,
+            'last_latency': 0.0  # Add last latency for debugging
         }
 
         
@@ -305,32 +307,37 @@ class RequestQueue:
         return None
     
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
-        """Record batch completion metrics"""
+        """Record batch completion metrics with enhanced tracking"""
         latency = (completion_time - batch.arrival_time) * 1000  # ms
         
+        # Update metrics atomically
+        self.metrics['last_latency'] = latency
         for _ in batch.request_ids:
             if latency > self.slo_target:
                 self.metrics['slo_violations'] += 1
-                print(f"Queue: {self.model_name} SLO violation: {latency:.2f}ms")
+                print(f"Queue: {self.model_name} SLO violation: {latency:.2f}ms vs target {self.slo_target}ms")
+            if len(self.metrics['latencies']) >= 1000:
+                self.metrics['latencies'] = self.metrics['latencies'][100:]  # Keep last 900 entries
             self.metrics['latencies'].append(latency)
         
         self.metrics['queue_size'] = self.queue.qsize()
     
     def get_stats(self) -> Dict:
-        """Get queue statistics"""
-        latencies = list(self.metrics['latencies'])
+        """Get queue statistics with real latency data"""
+        latencies = self.metrics['latencies']
         if not latencies:
             return {
                 'total_requests': self.metrics['total_requests'],
-                'dropped_requests': self.metrics['dropped_requests'], 
+                'dropped_requests': self.metrics['dropped_requests'],
                 'slo_violations': self.metrics['slo_violations'],
                 'queue_size': self.metrics['queue_size'],
+                'last_latency': self.metrics['last_latency'],
                 'avg_latency': 0,
                 'p95_latency': 0,
                 'p99_latency': 0
             }
 
-        # Calculate latency metrics
+        # Calculate latency metrics from actual data
         sorted_latencies = sorted(latencies)
         p95_idx = int(len(sorted_latencies) * 0.95)
         p99_idx = int(len(sorted_latencies) * 0.99)
@@ -338,8 +345,9 @@ class RequestQueue:
         return {
             'total_requests': self.metrics['total_requests'],
             'dropped_requests': self.metrics['dropped_requests'],
-            'slo_violations': self.metrics['slo_violations'], 
+            'slo_violations': self.metrics['slo_violations'],
             'queue_size': self.metrics['queue_size'],
+            'last_latency': self.metrics['last_latency'],
             'avg_latency': sum(latencies) / len(latencies),
             'p95_latency': sorted_latencies[p95_idx],
             'p99_latency': sorted_latencies[p99_idx]
