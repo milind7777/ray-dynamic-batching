@@ -22,6 +22,8 @@ from nexus import (
     nexus
 )
 
+SLO_hack = 2.2
+
 models_config = {
     'vit': {'SLO': 50, 'base_rate':1000},        # (model_name, SLO, initial_rate)
     'resnet': {'SLO': 200, 'base_rate': 2000},
@@ -811,7 +813,7 @@ class NexusScheduler:
         # also add sessions that have been created for new models
         for model, request_rate in update_info.items():
             if model not in self.sessions:
-                new_session = session(model, models_config[model]['SLO'] / 2, request_rate)
+                new_session = session(model, models_config[model]['SLO'] / SLO_hack, request_rate)
                 if new_session.request_rate > 0:
                     new_sessions.append(new_session)
 
