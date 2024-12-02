@@ -341,11 +341,9 @@ class RequestQueue:
                 
         self._update_window_metrics(current_time)
         
-        # Rest of the stats calculation remains the same
-        # ...existing code...
-        with self.lock:  # Add thread safety
-            latencies = list(self.latencies)
-            stats = {
+    
+        latencies = list(self.latencies)
+        stats = {
                 'total_requests': self.total_requests,
                 'dropped_requests': self.dropped_requests,
                 'slo_violations': self.slo_violations,
