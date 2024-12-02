@@ -208,7 +208,6 @@ class RequestQueue:
         self.window_start_time = time.time()
 
         self.dropped_requests = 0
-        self.lock = Lock()  # Add lock for thread safety
         self.metrics_queue = RayQueue()  # Use Ray queue instead of Lock
 
         
