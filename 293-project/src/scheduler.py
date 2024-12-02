@@ -490,6 +490,8 @@ class GPUWorker:
                 self.new_sessions   = None
                 self.new_duty_cycle = None
 
+                return True
+        return False
 
     def execute_schedule(self, request_queues: Dict[str, RequestQueue]):
         """Execute round-robin schedule with enhanced monitoring"""
@@ -535,15 +537,14 @@ class GPUWorker:
                     if self.stats['processed_batches'] % 100 == 0:
                         self.logger.info(f"Node {self.node_id} stats: {self.get_stats()}")
                 
-                # wait for duty cycle to finish
-                current_time    = time.time()
-                remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
-                if remaining_cycle > 0:
-                    time.sleep(remaining_cycle)
-
                 # check if worker needs to update node session at the end of the duty cycle
-                self._check_for_updates()
-                
+                if not self._check_for_updates():
+                    # wait for duty cycle to finish
+                    current_time    = time.time()
+                    remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
+                    if remaining_cycle > 0:
+                        time.sleep(remaining_cycle)
+
             except Exception as e:
                 self.logger.error(f"Error in schedule execution: {e}")
                 time.sleep(0.1)
