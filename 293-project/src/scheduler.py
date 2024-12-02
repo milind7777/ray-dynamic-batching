@@ -2,6 +2,7 @@ import ray
 import time
 import copy
 import torch
+from dataclasses import dataclass
 import itertools
 import traceback
 import logging
@@ -172,6 +173,7 @@ class RequestTracker:
         with self.lock:
             return self._total_requests
     
+@dataclass
 class BatchRequest:
     """Represents a batch of requests for processing"""
     model_name: str
