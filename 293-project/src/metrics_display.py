@@ -1,4 +1,3 @@
-
 import json
 import time
 from datetime import datetime
@@ -11,6 +10,7 @@ def clear_screen():
 def display_metrics():
     """Display metrics from shared file"""
     metrics_file = "metrics.json"
+    last_metrics = {}
     
     while True:
         try:
@@ -18,38 +18,42 @@ def display_metrics():
                 with open(metrics_file, 'r') as f:
                     metrics = json.load(f)
                 
-                #clear_screen()
-                print("=== Real-time SLO Metrics ===")
-                print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                print("=" * 50)
-                
-                for model_name, stats in metrics.items():
-                    print(f"\nModel: {model_name}")
-                    print("-" * 40)
+                # Only clear and reprint if metrics have changed
+                if metrics != last_metrics:
+                    clear_screen()
+                    print("=== Real-time SLO Metrics ===")
+                    print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    print("=" * 50)
                     
-                    # Calculate SLO compliance
-                    compliance = 100.0
-                    if stats['total_requests'] > 0:
-                        compliance = ((stats['total_requests'] - stats['slo_violations']) / 
-                                    stats['total_requests'] * 100)
+                    for model_name, stats in metrics.items():
+                        print(f"\nModel: {model_name}")
+                        print("-" * 40)
+                        
+                        # Calculate SLO compliance
+                        compliance = 100.0
+                        if stats['total_requests'] > 0:
+                            compliance = ((stats['total_requests'] - stats['slo_violations']) / 
+                                        stats['total_requests'] * 100)
+                        
+                        print(f"  SLO Target: {stats.get('slo_target', 'N/A')}ms")
+                        print(f"  Queue Size: {stats['queue_size']}")
+                        print(f"  Total Requests: {stats['total_requests']}")
+                        print(f"  Dropped Requests: {stats['dropped_requests']}")
+                        print(f"  SLO Violations: {stats['slo_violations']}")
+                        print(f"  SLO Compliance: {compliance:.2f}%")
+                        print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
+                        print(f"  P95 Latency: {stats['p95_latency']:.2f}ms")
+                        
+                        queue_status = "✓" if stats['queue_size'] < 1600 else "!"
+                        slo_status = "✓" if compliance >= 95 else "!" if compliance >= 90 else "✗"
+                        print(f"  Queue Status: {queue_status}  SLO Status: {slo_status}")
                     
-                    print(f"  Queue Size: {stats['queue_size']}")
-                    print(f"  Total Requests: {stats['total_requests']}")
-                    print(f"  Dropped Requests: {stats['dropped_requests']}")
-                    print(f"  SLO Violations: {stats['slo_violations']}")
-                    print(f"  SLO Compliance: {compliance:.2f}%")
-                    print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
-                    print(f"  P95 Latency: {stats['p95_latency']:.2f}ms")
+                    print("\n" + "=" * 50)
+                    print("Status: ✓ Good  ! Warning  ✗ Critical")
                     
-                    # Status indicators
-                    queue_status = "✓" if stats['queue_size'] < 1600 else "!"  # 80% of 2000
-                    slo_status = "✓" if compliance >= 95 else "!" if compliance >= 90 else "✗"
-                    print(f"  Queue Status: {queue_status}  SLO Status: {slo_status}")
-                
-                print("\n" + "=" * 50)
-                print("Status: ✓ Good  ! Warning  ✗ Critical")
+                    last_metrics = metrics.copy()
             
-            time.sleep(1)
+            time.sleep(0.1)  # Shorter sleep time for more responsive updates
             
         except Exception as e:
             print(f"Error reading metrics: {e}")
