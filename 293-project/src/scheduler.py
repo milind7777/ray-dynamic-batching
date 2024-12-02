@@ -467,8 +467,8 @@ class GPUWorker:
             _ = update_queue.get()
         
         latest = update_queue.get()
-        self.new_sessions = latest[0]
-        self.duty_cycle   = latest[1]
+        self.new_sessions   = latest[0]
+        self.new_duty_cycle = latest[1]
         
         if self.new_sessions != None:
             # transition from old schedule to new one
