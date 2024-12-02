@@ -47,6 +47,7 @@ def display_metrics():
                         # Display simplified metrics
                         print(f"  SLO Compliance: {compliance:.2f}%")
                         print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
+                        print(f"  Request Rate: {stats['request_rate']:.2f}ms")
                     else:
                         # Display full metrics
                         print(f"  Queue Size: {stats['queue_size']}")
