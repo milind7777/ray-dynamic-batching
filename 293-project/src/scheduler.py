@@ -413,7 +413,7 @@ class GPUWorker:
         self.logger.info(f"Stopping worker {self.node_id}")
         self.active = False
 
-    def process_batch(self, batch: BatchRequest) -> Dict:
+    def process_batch(self, batch: BatchRequest, request_queues: Dict[str, RequestQueue]) -> Dict:
         """Process batch with enhanced monitoring"""
         try:
             
@@ -439,9 +439,8 @@ class GPUWorker:
                 self.stats['total_requests'] += len(batch.request_ids)
                 self.stats['processing_times'].append(processing_time)
 
-                
                 # Record completion
-                self.request_queues[batch.model_name].record_batch_completion(
+                request_queues[batch.model_name].record_batch_completion(
                     batch, completion_time
                 )
                 
@@ -532,7 +531,7 @@ class GPUWorker:
                     if batch:
                         # print(f"GPU:WORKER:execute_schedule: Valid batch found")
                         # Process batch and measure timing
-                        result = self.process_batch(batch)
+                        result = self.process_batch(batch, request_queues)
                         processing_time = result['processing_time']
                     
                         # Log processing metrics
