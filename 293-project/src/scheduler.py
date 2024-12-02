@@ -937,8 +937,7 @@ class MetricsDisplay:
                 stats = queue.get_stats()
 
                 stats['request_rate'] = request_trackers[model_name].get_request_rate()
-                metrics[model_name] = queue.get_stats()
-            
+                metrics[model_name] = stats
             # Write current metrics to file
             with open(metrics_file, 'w') as f:
                 json.dump(metrics, f)
