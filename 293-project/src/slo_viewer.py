@@ -190,7 +190,7 @@ def main():
             print("SLO tracker not found in active actors")
             sys.exit(1)
             
-        slo_tracker = ray.get_actor_handle(slo_tracker_id)
+        slo_tracker = ray.get_actor(slo_tracker_id)
         queue = ray.get(slo_tracker.get_queue.remote())
             
 
