@@ -187,25 +187,48 @@ class BatchRequest:
     request_ids: List[str]
     arrival_time: float
 
-@ray.remote
-class RequestQueueActor:
-    """Ray actor version of RequestQueue"""
+class RequestQueue:
+    """Request queue with monitoring capabilities using Ray's Queue"""
     def __init__(self, model_name: str, max_size: int = 100, batch_profile: dict = {}):
         self.model_name = model_name
         self.queue = RayQueue(maxsize=max_size)
         self._logger = logging.getLogger(f"Queue-{model_name}")
+
         self.slo_target = models_config[model_name]['SLO']
         self.profile = batch_profile[model_name]
-        
-        # Metrics tracking
-        self.request_timestamps = deque(maxlen=1000)
-        self.latencies = deque(maxlen=1000)
+
+        # Simple metrics tracking
+        self.window_size = 60  # 1 minute window for rolling metrics
+        self.request_timestamps = deque(maxlen=1000)  # Store recent request timestamps
+        self.latencies = deque(maxlen=1000)  # Store recent latencies
         self.slo_violations = 0
         self.total_requests = 0
+        self.current_window_violations = 0
+        self.current_window_requests = 0
+        self.window_start_time = time.time()
+
         self.dropped_requests = 0
-        self.window_size = 60
+        self.lock = Lock()  # Add lock for thread safety
+        self.metrics_queue = RayQueue()  # Use Ray queue instead of Lock
+
         
+    def empty(self) -> bool:
+        """Check if queue is empty"""
+        return self.queue.qsize() == 0
+    
+    def _update_window_metrics(self, current_time: float):
+        """Update rolling window metrics"""
+        window_start = current_time - self.window_size
+        
+        # Remove old requests from current window
+        while self.request_timestamps and self.request_timestamps[0] < window_start:
+            self.request_timestamps.popleft()
+            
+        # Update current window metrics
+        self.current_window_requests = len(self.request_timestamps)
+
     def add_request(self, request_id: str, input_tensor: torch.Tensor) -> bool:
+        """Add request to queue with monitoring"""
         try:
             if self.queue.full():
                 self._logger.warning(f"Queue full for {self.model_name}")
@@ -215,13 +238,15 @@ class RequestQueueActor:
             current_time = time.time()
             self.queue.put((request_id, input_tensor, current_time))
             self.request_timestamps.append(current_time)
+            self._update_window_metrics(current_time)
             self.total_requests += 1
             return True
         except Exception as e:
             self._logger.error(f"Error adding request: {e}")
             return False
-        
+    
     def get_batch(self, batch_size: int) -> Optional[BatchRequest]:
+        """Get batch of requests with timeout handling"""
         requests = []
         inputs = []
         request_ids = []
@@ -232,6 +257,24 @@ class RequestQueueActor:
             if available == 0:
                 return None
                 
+            '''
+            batch = self.queue.get_batch(available, timeout=0)
+            for (request_id, input_tensor, arrival_time) in batch:
+            # for _ in range(available):
+            #     request_id, input_tensor, arrival_time = self.queue.get_nowait()
+                requests.append((request_id, input_tensor))
+                request_ids.append(request_id)
+                inputs.append(input_tensor)
+                earliest_arrival = min(earliest_arrival, arrival_time)
+                self._pending_count -= 1
+
+            # for _ in range(available):
+            #     request_id, input_tensor, arrival_time = self.queue.get_nowait()
+            #     requests.append((request_id, input_tensor))
+            #     request_ids.append(request_id)
+            #     inputs.append(input_tensor)
+            #     earliest_arrival = min(earliest_arrival, arrival_time)
+            #     self._pending_count -= 1'''
             batch = self.queue.get_nowait_batch(available)
             if not batch:
                 return None
@@ -256,15 +299,36 @@ class RequestQueueActor:
             self._logger.error(f"Error creating batch: {e}")
             
         return None
+    
+    def record_batch_completion(self, batch: BatchRequest, completion_time: float):
+        """Record batch completion with enhanced SLO tracking"""
+        current_time = time.time()
+        batch_latencies = []
+        batch_violations = 0
         
-    def record_batch_completion(self, batch_latencies: List[float], completion_time: float):
-        """Record batch completion metrics"""
-        for latency in batch_latencies:
+        for request_id in batch.request_ids:
+            latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
+            batch_latencies.append(latency)
             self.latencies.append(latency)
+            
             if latency > self.slo_target:
-                self.slo_violations += 1
-                
+                batch_violations += 1
+                self._logger.warning(
+                    f"SLO violation - Request ID: {request_id}, "
+                    f"Latency: {latency:.2f}ms, Target: {self.slo_target}ms"
+                )
+        
+        # Use atomic operation through Ray queue
+        self.metrics_queue.put({
+            'violations': batch_violations,
+            'latencies': batch_latencies,
+            'timestamp': current_time
+        })
+        
+        self._update_window_metrics(current_time)
+
     def get_stats(self) -> Dict:
+        """Get enhanced queue statistics with Ray-based synchronization"""
         current_time = time.time()
         
         # Process any pending metrics updates
@@ -280,18 +344,19 @@ class RequestQueueActor:
         
         # Rest of the stats calculation remains the same
         # ...existing code...
-        latencies = list(self.latencies)
-        stats = {
-            'total_requests': self.total_requests,
-            'dropped_requests': self.dropped_requests,
-            'slo_violations': self.slo_violations,
-            'queue_size': self.queue.qsize(),
-            'window_violation_rate': 0.0,
-            'avg_latency': 0,
-            'p95_latency': 0,
-            'p99_latency': 0,
-            'slo_target': self.slo_target  # Add SLO target to metrics
-        }
+        with self.lock:  # Add thread safety
+            latencies = list(self.latencies)
+            stats = {
+                'total_requests': self.total_requests,
+                'dropped_requests': self.dropped_requests,
+                'slo_violations': self.slo_violations,
+                'queue_size': self.queue.qsize(),
+                'window_violation_rate': 0.0,
+                'avg_latency': 0,
+                'p95_latency': 0,
+                'p99_latency': 0,
+                'slo_target': self.slo_target  # Add SLO target to metrics
+            }
         
         if latencies:
             sorted_latencies = sorted(latencies)
@@ -313,6 +378,231 @@ class RequestQueueActor:
             })
             
         return stats
+
+@ray.remote(num_gpus=1)
+class GPUWorker:
+    """ Ray actor for GPU computation"""
+    def __init__(self, node_id: str, gpu_id: int, sessions: List[Tuple], 
+                 duty_cycle: float, model_registry: Dict):
+        self.node_id = node_id
+        self.gpu_id = 0
+        self.duty_cycle = duty_cycle
+        self.sessions = deque(sessions)
+        self.models = {}
+        self.new_sessions = None
+        self.new_duty_cycle = None
+        self.lock = Lock()
+        self.model_registry = model_registry
+        self.device = 'cuda:0'
+        self.logger = logging.getLogger(f"Worker-{node_id}")
+        # Add diagnostic information
+        print(f"Worker {node_id} initialization:")
+        print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
+        print(f"Ray GPU IDs: {ray.get_gpu_ids()}")
+        print(f"PyTorch GPU count: {torch.cuda.device_count()}")
+        print(f"Requested GPU ID: {gpu_id}")
+        
+        for i in range(torch.cuda.device_count()):
+            print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+
+        print("GPU ID: "+str(self.gpu_id)+"--**--____----++++"+str(gpu_id))
+        # Initialize models
+        try:
+            device = f'cuda:{self.gpu_id}'
+            device = 'cuda:0'
+            # First check if device is available
+            if self.gpu_id >= torch.cuda.device_count():
+                raise ValueError(f"GPU {self.gpu_id} not available. Only {torch.cuda.device_count()} GPUs found.")
+                
+            for session, _ in sessions:
+                if session.model_name not in self.models:
+                    self.logger.info(f"Loading {session.model_name} on GPU {gpu_id}")
+                    model = model_registry[session.model_name]
+                    # Move model to CPU first then to specific GPU
+                    model = model.cpu()
+                    model = model.to(device)
+                    model.eval()
+                    self.models[session.model_name] = model
+                    
+        except Exception as e:
+            self.logger.error(f"Error initializing models: {e}")
+            raise
+        
+        self.active = True
+        self.stats = {
+            'processed_batches': 0,
+            'total_requests': 0,
+            'processing_times': []
+        }
+    
+    def stop(self):
+        """Stop the worker gracefully"""
+        self.logger.info(f"Stopping worker {self.node_id}")
+        self.active = False
+
+    def process_batch(self, batch: BatchRequest, request_queues: Dict[str, RequestQueue]) -> Dict:
+        """Process batch with enhanced monitoring"""
+        try:
+            
+            start_time = time.time()
+
+            model = self.models[batch.model_name]
+            #inputs = torch.stack(batch.inputs).to(f'cuda:{self.gpu_id}')
+            inputs = torch.stack(batch.inputs).cuda()  # Just use cuda() since only one GPU is visible
+
+            #with torch.cuda.device(self.gpu_id):
+            with torch.cuda.device(0):  # Always use device 0
+                torch.cuda.synchronize()  # Ensure GPU is ready
+                
+                with torch.no_grad():  # Disable gradient computation
+                    outputs = model(inputs)
+                
+                torch.cuda.synchronize()  # Wait for completion
+                
+                completion_time = time.time()
+                processing_time = (completion_time - start_time) * 1000  # ms
+                
+                self.stats['processed_batches'] += 1
+                self.stats['total_requests'] += len(batch.request_ids)
+                self.stats['processing_times'].append(processing_time)
+
+                # Record completion
+                request_queues[batch.model_name].record_batch_completion(
+                    batch, completion_time
+                )
+                
+                return {
+                    'outputs': outputs.cpu(),
+                    'request_ids': batch.request_ids,
+                    'processing_time': processing_time,
+                    'latency': time.time() - batch.arrival_time
+                }
+        except Exception as e:
+            self.logger.error(f"Error processing batch: {e}")
+            raise
+    
+    def _update_schedule(self, new_sessions: List[session], new_duty_cycle: float):
+        # print(f"GPUWORKER:_update_schedule: inside update schedule remote call")      
+        # print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
+        self.new_sessions   = new_sessions
+        self.new_duty_cycle = new_duty_cycle
+
+    def _check_for_updates(self, update_queue: RayQueue):
+        if update_queue.qsize() == 0:
+            return False
+        
+        while update_queue.qsize() > 1:
+            _ = update_queue.get()
+        
+        latest = update_queue.get()
+        self.new_sessions   = latest[0]
+        self.new_duty_cycle = latest[1]
+        
+        if self.new_sessions != None:
+            # transition from old schedule to new one
+            new_model_list = [s.model_name for s, _ in self.new_sessions]
+            old_model_list = [s.model_name for s, _ in self.sessions]
+
+            # first unload all models not present in the new session
+            for model_name in old_model_list:
+                if model_name not in new_model_list:
+                    # unload model
+                    self.models[model_name].cpu()
+                    del self.models[model_name]
+                    torch.cuda.empty_cache()
+
+            # load new models to gpu
+            for model_name in new_model_list:
+                if model_name not in old_model_list:
+                    # load model to gpu
+                    model = self.model_registry[model_name]
+                    model = model.cpu()
+                    model = model.to(self.device)
+                    model.eval()
+                    self.models[model_name] = model
+
+            self.sessions   = deque(self.new_sessions.copy())
+            self.duty_cycle = self.new_duty_cycle
+
+            self.new_sessions   = None
+            self.new_duty_cycle = None
+
+            return True
+
+    def execute_schedule(self, request_queues: Dict[str, RequestQueue], update_queue: RayQueue):
+        """Execute round-robin schedule with enhanced monitoring"""
+        self.logger.info(f"Starting schedule execution on {self.node_id}")
+    
+        while self.active:
+            # print(f"GPU:WORKER:execute_schedule: Starting new dutry cycle")
+            try:
+                total_time       = self.duty_cycle
+                cycle_start_time = time.time()
+
+                if len(self.sessions) == 0:
+                    time.sleep(2/100)
+                    
+                for s, occupancy in self.sessions:
+                    # print(f"GPU:WORKER:execute_schedule: looking at session {s.model_name}")
+                    # calculate current time slice
+                    time_slice         = total_time * occupancy
+                    session_start_time = time.time()
+
+                    # Get queue for current model
+                    queue = request_queues[s.model_name]
+
+                    # Try to get batch from queue
+                    # print(f"calling get batch for {s.model_name}")
+                    # print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
+                    batch = queue.get_batch(s.batch_size)
+                    if batch:
+                        # print(f"GPU:WORKER:execute_schedule: Valid batch found")
+                        # Process batch and measure timing
+                        result = self.process_batch(batch, request_queues)
+                        processing_time = result['processing_time']
+                    
+                        # Log processing metrics
+                        self.logger.info(
+                            f"Processed batch of {batch.batch_size} requests for {s.model_name} "
+                            f"in {processing_time:.2f}ms"
+                        )
+                    
+                        # Sleep for remaining time if any
+                        remaining_time = time_slice - processing_time
+                        if remaining_time > 0:
+                            time.sleep(remaining_time / 1000)
+                    else:
+                        # No requests, sleep for time slice
+                        time.sleep(time_slice / 1000)
+
+                    # Log execution stats periodically
+                    if self.stats['processed_batches'] % 100 == 0:
+                        self.logger.info(f"Node {self.node_id} stats: {self.get_stats()}")
+                
+                # check if worker needs to update node session at the end of the duty cycle
+                if not self._check_for_updates(update_queue):
+                    # wait for duty cycle to finish
+                    current_time    = time.time()
+                    remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
+                    if remaining_cycle > 0:
+                        # print(f"GPU:WORKER:execute_schedule: Going to sleep for {remaining_cycle}")
+                        time.sleep(remaining_cycle)
+
+            except Exception as e:
+                self.logger.error(f"Error in schedule execution: {e}")
+                time.sleep(0.1)
+    
+    def get_stats(self) -> Dict:
+        """Get worker statistics"""
+        return {
+            'node_id': self.node_id,
+            'gpu_id': self.gpu_id,
+            'processed_batches': self.stats['processed_batches'],
+            'total_requests': self.stats['total_requests'],
+            'avg_processing_time': sum(self.stats['processing_times'][-100:]) / 
+                                 len(self.stats['processing_times'][-100:])
+                                 if self.stats['processing_times'] else 0
+        }
 
 class NexusScheduler:
     """
@@ -342,7 +632,7 @@ class NexusScheduler:
         self.logger = logging.getLogger("NexusScheduler")
 
         # Initialize request queues
-        self.queue_actors = {}
+        self.request_queues = {}
         self.update_queues  = []
         self._init_queues(2000)
         
@@ -355,7 +645,7 @@ class NexusScheduler:
 
         # Initialize metrics display
         self.metrics_display = MetricsDisplay(update_interval=5.0)
-        self.metrics_display.start(self.queue_actors)
+        self.metrics_display.start(self.request_queues)
 
         # Add metrics tracking
         self.metrics: Dict[str, Dict] = {
@@ -366,14 +656,22 @@ class NexusScheduler:
         }
     
     def _init_queues(self, max_queue_size: int):
-        """Initialize request queue actors"""
+        """Initialize request queues for all models"""
         for model in models_config.keys():
-            self.queue_actors[model] = ray.remote(RequestQueueActor).remote(
+            self.request_queues[model] = RequestQueue(
                 model_name=model,
                 max_size=max_queue_size,
                 batch_profile=self.batching_profile
             )
+
             self.request_trackers[model] = RequestTracker(1)
+        # for schedule in self.node_schedules:
+        #     for session, _ in schedule['sessions']:
+        #         if session.model_name not in self.request_queues:
+        #             self.request_queues[session.model_name] = RequestQueue(
+        #                 model_name=session.model_name,
+        #                 max_size=max_queue_size
+        #             )
 
     def _init_workers(self):
         """Initialize GPU workers"""
@@ -408,7 +706,7 @@ class NexusScheduler:
             # Create ray actors and start execution
             ind = 0
             for worker in self.workers:
-                self.futures.append(worker.execute_schedule.remote(self.queue_actors, self.update_queues[ind]))
+                self.futures.append(worker.execute_schedule.remote(self.request_queues, self.update_queues[ind]))
                 ind+=1
         
             # Start monitoring thread
@@ -440,13 +738,18 @@ class NexusScheduler:
 
     def submit_request(self, model_name: str, request_id: str, 
                       input_tensor: torch.Tensor) -> bool:
-        """Submit request to queue actor"""
+        """Submit request with error handling"""
         try:
-            if model_name not in self.queue_actors:
+            if model_name not in self.request_queues:
+                self.logger.error(f"No queue found for model {model_name}")
                 return False
-            success = ray.get(self.queue_actors[model_name].add_request.remote(request_id, input_tensor))
-            if success:
-                self.request_trackers[model_name].record_request()
+            
+            success = self.request_queues[model_name].add_request(
+                request_id, input_tensor
+            )
+
+            self.request_trackers[model_name].record_request()
+            
             return success
         except Exception as e:
             self.logger.error(f"Error submitting request: {e}")
@@ -609,236 +912,6 @@ class NexusScheduler:
             pass
         
 
-@ray.remote(num_gpus=1)
-class GPUWorker:
-    """ Ray actor for GPU computation"""
-    def __init__(self, node_id: str, gpu_id: int, sessions: List[Tuple], 
-                 duty_cycle: float, model_registry: Dict):
-        self.node_id = node_id
-        self.gpu_id = 0
-        self.duty_cycle = duty_cycle
-        self.sessions = deque(sessions)
-        self.models = {}
-        self.new_sessions = None
-        self.new_duty_cycle = None
-        self.lock = Lock()
-        self.model_registry = model_registry
-        self.device = 'cuda:0'
-        self.logger = logging.getLogger(f"Worker-{node_id}")
-        # Add diagnostic information
-        print(f"Worker {node_id} initialization:")
-        print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
-        print(f"Ray GPU IDs: {ray.get_gpu_ids()}")
-        print(f"PyTorch GPU count: {torch.cuda.device_count()}")
-        print(f"Requested GPU ID: {gpu_id}")
-        
-        for i in range(torch.cuda.device_count()):
-            print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
-
-        print("GPU ID: "+str(self.gpu_id)+"--**--____----++++"+str(gpu_id))
-        # Initialize models
-        try:
-            device = f'cuda:{self.gpu_id}'
-            device = 'cuda:0'
-            # First check if device is available
-            if self.gpu_id >= torch.cuda.device_count():
-                raise ValueError(f"GPU {self.gpu_id} not available. Only {torch.cuda.device_count()} GPUs found.")
-                
-            for session, _ in sessions:
-                if session.model_name not in self.models:
-                    self.logger.info(f"Loading {session.model_name} on GPU {gpu_id}")
-                    model = model_registry[session.model_name]
-                    # Move model to CPU first then to specific GPU
-                    model = model.cpu()
-                    model = model.to(device)
-                    model.eval()
-                    self.models[session.model_name] = model
-                    
-        except Exception as e:
-            self.logger.error(f"Error initializing models: {e}")
-            raise
-        
-        self.active = True
-        self.stats = {
-            'processed_batches': 0,
-            'total_requests': 0,
-            'processing_times': []
-        }
-    
-    def stop(self):
-        """Stop the worker gracefully"""
-        self.logger.info(f"Stopping worker {self.node_id}")
-        self.active = False
-
-    def process_batch(self, batch: BatchRequest, request_queues: Dict[str, RequestQueue]) -> Dict:
-        """Process batch with enhanced monitoring"""
-        try:
-            
-            start_time = time.time()
-
-            model = self.models[batch.model_name]
-            #inputs = torch.stack(batch.inputs).to(f'cuda:{self.gpu_id}')
-            inputs = torch.stack(batch.inputs).cuda()  # Just use cuda() since only one GPU is visible
-
-            #with torch.cuda.device(self.gpu_id):
-            with torch.cuda.device(0):  # Always use device 0
-                torch.cuda.synchronize()  # Ensure GPU is ready
-                
-                with torch.no_grad():  # Disable gradient computation
-                    outputs = model(inputs)
-                
-                torch.cuda.synchronize()  # Wait for completion
-                
-                completion_time = time.time()
-                processing_time = (completion_time - start_time) * 1000  # ms
-                
-                self.stats['processed_batches'] += 1
-                self.stats['total_requests'] += len(batch.request_ids)
-                self.stats['processing_times'].append(processing_time)
-
-                # Record completion
-                request_queues[batch.model_name].record_batch_completion(
-                    batch, completion_time
-                )
-                
-                return {
-                    'outputs': outputs.cpu(),
-                    'request_ids': batch.request_ids,
-                    'processing_time': processing_time,
-                    'latency': time.time() - batch.arrival_time
-                }
-        except Exception as e:
-            self.logger.error(f"Error processing batch: {e}")
-            raise
-    
-    def _update_schedule(self, new_sessions: List[session], new_duty_cycle: float):
-        # print(f"GPUWORKER:_update_schedule: inside update schedule remote call")      
-        # print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
-        self.new_sessions   = new_sessions
-        self.new_duty_cycle = new_duty_cycle
-
-    def _check_for_updates(self, update_queue: RayQueue):
-        if update_queue.qsize() == 0:
-            return False
-        
-        while update_queue.qsize() > 1:
-            _ = update_queue.get()
-        
-        latest = update_queue.get()
-        self.new_sessions   = latest[0]
-        self.new_duty_cycle = latest[1]
-        
-        if self.new_sessions != None:
-            # transition from old schedule to new one
-            new_model_list = [s.model_name for s, _ in self.new_sessions]
-            old_model_list = [s.model_name for s, _ in self.sessions]
-
-            # first unload all models not present in the new session
-            for model_name in old_model_list:
-                if model_name not in new_model_list:
-                    # unload model
-                    self.models[model_name].cpu()
-                    del self.models[model_name]
-                    torch.cuda.empty_cache()
-
-            # load new models to gpu
-            for model_name in new_model_list:
-                if model_name not in old_model_list:
-                    # load model to gpu
-                    model = self.model_registry[model_name]
-                    model = model.cpu()
-                    model = model.to(self.device)
-                    model.eval()
-                    self.models[model_name] = model
-
-            self.sessions   = deque(self.new_sessions.copy())
-            self.duty_cycle = self.new_duty_cycle
-
-            self.new_sessions   = None
-            self.new_duty_cycle = None
-
-            return True
-
-    def execute_schedule(self, queue_actors: Dict[str, ray.actor.ActorHandle], update_queue: RayQueue):
-        """Execute schedule using queue actors instead of queues"""
-        self.logger.info(f"Starting schedule execution on {self.node_id}")
-    
-        while self.active:
-            # print(f"GPU:WORKER:execute_schedule: Starting new dutry cycle")
-            try:
-                total_time       = self.duty_cycle
-                cycle_start_time = time.time()
-
-                if len(self.sessions) == 0:
-                    time.sleep(2/100)
-                    
-                for s, occupancy in self.sessions:
-                    # print(f"GPU:WORKER:execute_schedule: looking at session {s.model_name}")
-                    # calculate current time slice
-                    time_slice         = total_time * occupancy
-                    session_start_time = time.time()
-
-                    # Get queue for current model
-                    queue_actor = queue_actors[s.model_name]
-
-                    # Try to get batch from queue
-                    # print(f"calling get batch for {s.model_name}")
-                    # print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
-                    batch = ray.get(queue_actor.get_batch.remote(s.batch_size))
-                    if batch:
-                        # print(f"GPU:WORKER:execute_schedule: Valid batch found")
-                        # Process batch and measure timing
-                        result = self.process_batch(batch, queue_actors)
-                        processing_time = result['processing_time']
-                    
-                        # Log processing metrics
-                        self.logger.info(
-                            f"Processed batch of {batch.batch_size} requests for {s.model_name} "
-                            f"in {processing_time:.2f}ms"
-                        )
-                    
-                        # Record completion through actor
-                        ray.get(queue_actor.record_batch_completion.remote(
-                            result['latencies'], 
-                            result['completion_time']
-                        ))
-
-                        # Sleep for remaining time if any
-                        remaining_time = time_slice - processing_time
-                        if remaining_time > 0:
-                            time.sleep(remaining_time / 1000)
-                    else:
-                        # No requests, sleep for time slice
-                        time.sleep(time_slice / 1000)
-
-                    # Log execution stats periodically
-                    if self.stats['processed_batches'] % 100 == 0:
-                        self.logger.info(f"Node {self.node_id} stats: {self.get_stats()}")
-                
-                # check if worker needs to update node session at the end of the duty cycle
-                if not self._check_for_updates(update_queue):
-                    # wait for duty cycle to finish
-                    current_time    = time.time()
-                    remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
-                    if remaining_cycle > 0:
-                        # print(f"GPU:WORKER:execute_schedule: Going to sleep for {remaining_cycle}")
-                        time.sleep(remaining_cycle)
-
-            except Exception as e:
-                self.logger.error(f"Error in schedule execution: {e}")
-                time.sleep(0.1)
-    
-    def get_stats(self) -> Dict:
-        """Get worker statistics"""
-        return {
-            'node_id': self.node_id,
-            'gpu_id': self.gpu_id,
-            'processed_batches': self.stats['processed_batches'],
-            'total_requests': self.stats['total_requests'],
-            'avg_processing_time': sum(self.stats['processing_times'][-100:]) / 
-                                 len(self.stats['processing_times'][-100:])
-                                 if self.stats['processing_times'] else 0
-        }
 
 class MetricsDisplay:
     """Metrics display manager that launches display in separate terminal"""
