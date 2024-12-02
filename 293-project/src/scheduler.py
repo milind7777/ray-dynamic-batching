@@ -183,8 +183,10 @@ class BatchRequest:
     inputs: List[torch.Tensor]
     batch_size: int
     request_ids: List[str]
-    arrival_time: float
+    arrival_times: Dict[str, float]  # Map request_id to its arrival time
+    batch_arrival_time: float
 
+@ray.remote
 class SharedSLOTracker:
     def __init__(self):
         self.queue = RayQueue()
@@ -261,6 +263,7 @@ class RequestQueue:
         requests = []
         inputs = []
         request_ids = []
+        arrival_times = {}
         earliest_arrival = float('inf')
         
         try:
@@ -293,6 +296,7 @@ class RequestQueue:
             for rid, tensor, arrival_time in batch:
                 request_ids.append(rid)
                 inputs.append(tensor)
+                arrival_times[rid] = arrival_time
                 earliest_arrival = min(earliest_arrival, arrival_time)
                     
             if inputs:
@@ -301,7 +305,8 @@ class RequestQueue:
                     inputs=inputs,
                     batch_size=len(inputs),
                     request_ids=request_ids,
-                    arrival_time=earliest_arrival
+                    arrival_times=arrival_times,
+                    batch_arrival_time=earliest_arrival
                 )
 
         except Empty:
@@ -316,12 +321,13 @@ class RequestQueue:
         current_time = time.time()
         latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
 
-        # Write to shared memory tracker
-        if self.slo_tracker:
-            self.slo_tracker.write_metric(self.model_id, latency)
+        
 
         for request_id in batch.request_ids:
-            self.latencies.append(latency)
+            request_latency = (completion_time - batch.arrival_times[request_id]) * 1000
+            if self.slo_tracker:
+                self.slo_tracker.write_metric.remote(self.model_id, request_latency, request_id)
+            self.latencies.append(request_latency)
             
             if latency > self.slo_target:
                 self.slo_violations += 1
@@ -627,7 +633,7 @@ class NexusScheduler:
         self.logger = logging.getLogger("NexusScheduler")
 
         # Initialize SLO tracker
-        self.slo_tracker = SharedSLOTracker()
+        self.slo_tracker = SharedSLOTracker.options(name="slo_tracker").remote()
 
         # Initialize request queues
         self.request_queues = {}
@@ -657,8 +663,8 @@ class NexusScheduler:
     
     def _init_queues(self, max_queue_size: int):
         """Initialize request queues for all models"""
-        self.slo_queue = RayQueue()  # Create shared SLO queue
-        ray.get_actor("slo_tracker").set_queue.remote(self.slo_queue)  # Register queue with Ray
+        self.slo_queue = ray.get(self.slo_tracker.get_queue.remote())
+
         for model in models_config.keys():
             queue = RequestQueue(
                 model_name=model,
@@ -666,7 +672,7 @@ class NexusScheduler:
                 batch_profile=self.batching_profile
             )
 
-            queue.slo_queue = self.slo_queue  # Pass shared queue to RequestQueue
+            queue.slo_tracker = self.slo_tracker 
             self.request_queues[model] = queue
             self.request_trackers[model] = RequestTracker(1)
         # for schedule in self.node_schedules:
