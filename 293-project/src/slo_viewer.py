@@ -9,7 +9,7 @@ from collections import defaultdict
 
 class SLOViewer:
     def __init__(self):
-        ray.init(address='auto', namespace='SLOMonitroing')
+        ray.init(address='auto', namespace='SLOMonitoring')
         self.model_map = {
             hash('vit') % 1000: ('vit', 50),
             hash('resnet') % 1000: ('resnet', 200),
