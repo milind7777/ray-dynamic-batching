@@ -191,8 +191,8 @@ class SharedSLOTracker:
     def __init__(self):
         self.queue = RayQueue()
         
-    def write_metric(self, model_id: int, latency: float):
-        self.queue.put((time.time(), model_id, latency))
+    def write_metric(self, model_id: int, latency: float, request_id: str):
+        self.queue.put((time.time(), model_id, latency, request_id))
 
     def get_queue(self):
         return self.queue
