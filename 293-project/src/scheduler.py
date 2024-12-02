@@ -208,7 +208,6 @@ class RequestQueue:
         self.window_start_time = time.time()
 
         self.dropped_requests = 0
-        self.metrics_queue = RayQueue()  # Use Ray queue instead of Lock
 
         
     def empty(self) -> bool:
@@ -302,48 +301,30 @@ class RequestQueue:
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
         """Record batch completion with enhanced SLO tracking"""
         current_time = time.time()
-        batch_latencies = []
-        batch_violations = 0
         
         for request_id in batch.request_ids:
             latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
-            batch_latencies.append(latency)
             self.latencies.append(latency)
             
             if latency > self.slo_target:
-                batch_violations += 1
+                self.slo_violations += 1
+                self.current_window_violations += 1
+                
                 self._logger.warning(
                     f"SLO violation - Request ID: {request_id}, "
                     f"Latency: {latency:.2f}ms, Target: {self.slo_target}ms"
                 )
-        
-        # Use atomic operation through Ray queue
-        self.metrics_queue.put({
-            'violations': batch_violations,
-            'latencies': batch_latencies,
-            'timestamp': current_time
-        })
-        
-        self._update_window_metrics(current_time)
-
-    def get_stats(self) -> Dict:
-        """Get enhanced queue statistics with Ray-based synchronization"""
-        current_time = time.time()
-        
-        # Process any pending metrics updates
-        while not self.metrics_queue.empty():
-            try:
-                update = self.metrics_queue.get_nowait()
-                self.slo_violations += update['violations']
-                self.current_window_violations += update['violations']
-            except Empty:
-                break
                 
         self._update_window_metrics(current_time)
-        
     
+    def get_stats(self) -> Dict:
+        """Get enhanced queue statistics"""
+        current_time = time.time()
+        self._update_window_metrics(current_time)
+        
         latencies = list(self.latencies)
-        stats = {
+        if not latencies:
+            return {
                 'total_requests': self.total_requests,
                 'dropped_requests': self.dropped_requests,
                 'slo_violations': self.slo_violations,
@@ -351,30 +332,30 @@ class RequestQueue:
                 'window_violation_rate': 0.0,
                 'avg_latency': 0,
                 'p95_latency': 0,
-                'p99_latency': 0,
-                'slo_target': self.slo_target  # Add SLO target to metrics
+                'p99_latency': 0
             }
+        # Calculate percentiles properly
+        sorted_latencies = sorted(latencies)
+        p95_idx = int(len(sorted_latencies) * 0.95)
+        p99_idx = int(len(sorted_latencies) * 0.99)
         
-        if latencies:
-            sorted_latencies = sorted(latencies)
-            p95_idx = int(len(sorted_latencies) * 0.95)
-            p99_idx = int(len(sorted_latencies) * 0.99)
-            
-            window_violation_rate = (
-                (self.current_window_violations / self.current_window_requests * 100)
-                if self.current_window_requests > 0 else 0
-            )
-            
-            stats.update({
-                'window_violation_rate': window_violation_rate,
-                'avg_latency': sum(latencies) / len(latencies),
-                'p95_latency': sorted_latencies[p95_idx],
-                'p99_latency': sorted_latencies[p99_idx],
-                'current_window_requests': self.current_window_requests,
-                'current_window_violations': self.current_window_violations
-            })
-            
-        return stats
+        window_violation_rate = (
+            (self.current_window_violations / self.current_window_requests * 100)
+            if self.current_window_requests > 0 else 0
+        )
+        
+        return {
+            'total_requests': self.total_requests,
+            'dropped_requests': self.dropped_requests,
+            'slo_violations': self.slo_violations,
+            'queue_size': self.queue.qsize(),
+            'window_violation_rate': window_violation_rate,
+            'avg_latency': sum(latencies) / len(latencies),
+            'p95_latency': sorted_latencies[p95_idx],
+            'p99_latency': sorted_latencies[p99_idx],
+            'current_window_requests': self.current_window_requests,
+            'current_window_violations': self.current_window_violations
+        }
 
 @ray.remote(num_gpus=1)
 class GPUWorker:
@@ -756,7 +737,7 @@ class NexusScheduler:
     #     """Record an incoming request for a model"""
     #     if model_name not in self.request_trackers:
     #         with self.lock:
-    #             if (model_name not in self.request_trackers):
+    #             if model_name not in self.request_trackers:
     #                 self.request_trackers[model_name] = RequestTracker()
     #                 self.metrics['total_requests'][model_name] = 0
     #     self.request_trackers[model_name].record_request()
@@ -916,7 +897,7 @@ class MetricsDisplay:
         self.update_interval = update_interval
         self.stop_display = False
         self.metrics_process = None
-        self.metrics_queue = RayQueue()  # Use Ray queue instead of threading Queue
+        self.shared_queue = Queue()
         
     def start(self, request_queues: Dict[str, RequestQueue]):
         """Start metrics display in new terminal"""
@@ -950,21 +931,14 @@ class MetricsDisplay:
         """Collect metrics and write to shared file"""
         metrics_file = "metrics.json"
         while not self.stop_display:
-            try:
-                metrics = {}
-                for model_name, queue in request_queues.items():
-                    metrics[model_name] = queue.get_stats()
-                
-                # Write atomically using Ray queue
-                self.metrics_queue.put(metrics)
-                
-                # Write to file
-                with open(metrics_file, 'w') as f:
-                    json.dump(metrics, f)
-                    
-            except Exception as e:
-                logging.error(f"Error collecting metrics: {e}")
-                
+            metrics = {}
+            for model_name, queue in request_queues.items():
+                metrics[model_name] = queue.get_stats()
+            
+            # Write current metrics to file
+            with open(metrics_file, 'w') as f:
+                json.dump(metrics, f)
+            
             time.sleep(self.update_interval)
 
 def main():
