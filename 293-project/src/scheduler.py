@@ -15,8 +15,7 @@ from threading import Lock, Thread
 from queue import Queue, Empty
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
-from multiprocessing import shared_memory
-import numpy as np
+
 from nexus import (
     session,
     node,
@@ -183,22 +182,7 @@ class BatchRequest:
     inputs: List[torch.Tensor]
     batch_size: int
     request_ids: List[str]
-    arrival_times: Dict[str, float]  # Map request_id to its arrival time
-    batch_arrival_time: float
-
-@ray.remote
-class SharedSLOTracker:
-    def __init__(self):
-        self.queue = RayQueue()
-        
-    def write_metric(self, model_id: int, latency: float, request_id: str):
-        self.queue.put((time.time(), model_id, latency, request_id))
-
-    def get_queue(self):
-        return self.queue
-        
-    def cleanup(self):
-        pass
+    arrival_time: float
 
 class RequestQueue:
     """Request queue with monitoring capabilities using Ray's Queue"""
@@ -207,13 +191,8 @@ class RequestQueue:
         self.queue = RayQueue(maxsize=max_size)
         self._logger = logging.getLogger(f"Queue-{model_name}")
 
-
-        self.model_id = hash(model_name) % 1000
-
         self.slo_target = models_config[model_name]['SLO']
         self.profile = batch_profile[model_name]
-        self.slo_tracker = None  # Will be set by scheduler
-
 
         # Simple metrics tracking
         self.window_size = 60  # 1 minute window for rolling metrics
@@ -266,7 +245,6 @@ class RequestQueue:
         requests = []
         inputs = []
         request_ids = []
-        arrival_times = {}
         earliest_arrival = float('inf')
         
         try:
@@ -299,7 +277,6 @@ class RequestQueue:
             for rid, tensor, arrival_time in batch:
                 request_ids.append(rid)
                 inputs.append(tensor)
-                arrival_times[rid] = arrival_time
                 earliest_arrival = min(earliest_arrival, arrival_time)
                     
             if inputs:
@@ -308,8 +285,7 @@ class RequestQueue:
                     inputs=inputs,
                     batch_size=len(inputs),
                     request_ids=request_ids,
-                    arrival_times=arrival_times,
-                    batch_arrival_time=earliest_arrival
+                    arrival_time=earliest_arrival
                 )
 
         except Empty:
@@ -322,15 +298,10 @@ class RequestQueue:
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
         """Record batch completion with enhanced SLO tracking"""
         current_time = time.time()
-        latency = (completion_time - batch.batch_arrival_time) * 1000  # Convert to ms
-
         
-
         for request_id in batch.request_ids:
-            request_latency = (completion_time - batch.arrival_times[request_id]) * 1000
-            if self.slo_tracker:
-                self.slo_tracker.write_metric.remote(self.model_id, request_latency, request_id)
-            self.latencies.append(request_latency)
+            latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
+            self.latencies.append(latency)
             
             if latency > self.slo_target:
                 self.slo_violations += 1
@@ -479,7 +450,7 @@ class GPUWorker:
                     'outputs': outputs.cpu(),
                     'request_ids': batch.request_ids,
                     'processing_time': processing_time,
-                    'latency': time.time() - batch.batch_arrival_time
+                    'latency': time.time() - batch.arrival_time
                 }
         except Exception as e:
             self.logger.error(f"Error processing batch: {e}")
@@ -635,11 +606,6 @@ class NexusScheduler:
         self._stop_monitoring = False
         self.logger = logging.getLogger("NexusScheduler")
 
-        # Initialize SLO tracker
-        self.slo_tracker = SharedSLOTracker.options(name="slo_tracker", namespace='SLOMonitoring').remote()
-        print(f"Created tracker in namespace: {ray.get_runtime_context().namespace}")
-
-
         # Initialize request queues
         self.request_queues = {}
         self.update_queues  = []
@@ -652,11 +618,9 @@ class NexusScheduler:
         self._init_workers()
         self._start_workers()
 
-
-
         # Initialize metrics display
-        #self.metrics_display = MetricsDisplay(update_interval=5.0)
-        #self.metrics_display.start(self.request_queues)
+        self.metrics_display = MetricsDisplay(update_interval=5.0)
+        self.metrics_display.start(self.request_queues)
 
         # Add metrics tracking
         self.metrics: Dict[str, Dict] = {
@@ -668,17 +632,13 @@ class NexusScheduler:
     
     def _init_queues(self, max_queue_size: int):
         """Initialize request queues for all models"""
-        self.slo_queue = ray.get(self.slo_tracker.get_queue.remote())
-
         for model in models_config.keys():
-            queue = RequestQueue(
+            self.request_queues[model] = RequestQueue(
                 model_name=model,
                 max_size=max_queue_size,
                 batch_profile=self.batching_profile
             )
 
-            queue.slo_tracker = self.slo_tracker 
-            self.request_queues[model] = queue
             self.request_trackers[model] = RequestTracker(1)
         # for schedule in self.node_schedules:
         #     for session, _ in schedule['sessions']:
@@ -687,10 +647,6 @@ class NexusScheduler:
         #                 model_name=session.model_name,
         #                 max_size=max_queue_size
         #             )
-
-    def __del__(self):
-        if hasattr(self, 'slo_tracker'):
-            self.slo_tracker.cleanup()
 
     def _init_workers(self):
         """Initialize GPU workers"""
@@ -1071,4 +1027,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
