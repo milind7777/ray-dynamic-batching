@@ -852,6 +852,8 @@ class NexusScheduler:
 
         for i in range(min(l, n)):
             print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
+            print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
+            print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].duty_cycle}")
             self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle)
 
         if l > n:
