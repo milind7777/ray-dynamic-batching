@@ -311,6 +311,7 @@ class RequestQueue:
         for _ in batch.request_ids:
             if latency > self.slo_target:
                 self.metrics['slo_violations'] += 1
+                print(f"Queue: {self.model_name} SLO violation: {latency:.2f}ms")
             self.metrics['latencies'].append(latency)
         
         self.metrics['queue_size'] = self.queue.qsize()
