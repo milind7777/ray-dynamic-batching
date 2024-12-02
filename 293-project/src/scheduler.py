@@ -455,44 +455,43 @@ class GPUWorker:
             raise
     
     def _update_schedule(self, new_sessions: List[session], new_duty_cycle: float):
-        print(f"GPUWORKER:_update_schedule: inside update schedule remote call")
-        with self.lock:
-            print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
-            self.new_sessions   = new_sessions
-            self.new_duty_cycle = new_duty_cycle
+        print(f"GPUWORKER:_update_schedule: inside update schedule remote call")      
+        print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
+        self.new_sessions   = new_sessions
+        self.new_duty_cycle = new_duty_cycle
 
     def _check_for_updates(self):
-        with self.lock:
-            if self.new_sessions != None:
-                # transition from old schedule to new one
-                new_model_list = [s.model_name for s, _ in self.new_sessions]
-                old_model_list = [s.model_name for s, _ in self.sessions]
+        
+        if self.new_sessions != None:
+            # transition from old schedule to new one
+            new_model_list = [s.model_name for s, _ in self.new_sessions]
+            old_model_list = [s.model_name for s, _ in self.sessions]
 
-                # first unload all models not present in the new session
-                for model_name in old_model_list:
-                    if model_name not in new_model_list:
-                        # unload model
-                        self.models[model_name].cpu()
-                        del self.models[model_name]
-                        torch.cuda.empty_cache()
+            # first unload all models not present in the new session
+            for model_name in old_model_list:
+                if model_name not in new_model_list:
+                    # unload model
+                    self.models[model_name].cpu()
+                    del self.models[model_name]
+                    torch.cuda.empty_cache()
 
-                # load new models to gpu
-                for model_name in new_model_list:
-                    if model_name not in old_model_list:
-                        # load model to gpu
-                        model = self.model_registry[model_name]
-                        model = model.cpu()
-                        model = model.to(self.device)
-                        model.eval()
-                        self.models[model_name] = model
+            # load new models to gpu
+            for model_name in new_model_list:
+                if model_name not in old_model_list:
+                    # load model to gpu
+                    model = self.model_registry[model_name]
+                    model = model.cpu()
+                    model = model.to(self.device)
+                    model.eval()
+                    self.models[model_name] = model
 
-                self.sessions   = self.new_sessions.copy()
-                self.duty_cycle = self.new_duty_cycle.copy()
+            self.sessions   = self.new_sessions.copy()
+            self.duty_cycle = self.new_duty_cycle.copy()
 
-                self.new_sessions   = None
-                self.new_duty_cycle = None
+            self.new_sessions   = None
+            self.new_duty_cycle = None
 
-                return True
+            return True
         return False
 
     def execute_schedule(self, request_queues: Dict[str, RequestQueue]):
