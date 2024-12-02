@@ -494,7 +494,7 @@ class GPUWorker:
                     self.models[model_name] = model
 
             self.sessions   = self.new_sessions.copy()
-            self.duty_cycle = self.new_duty_cycle.copy()
+            self.duty_cycle = self.new_duty_cycle
 
             self.new_sessions   = None
             self.new_duty_cycle = None
