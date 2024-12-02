@@ -24,7 +24,7 @@ from nexus import (
 
 models_config = {
     'vit': {'SLO': 50, 'base_rate':1000},        # (model_name, SLO, initial_rate)
-    'resnet': {'SLO': 50, 'base_rate': 2000},
+    'resnet': {'SLO': 200, 'base_rate': 2000},
     'shufflenet': {'SLO': 30, 'base_rate': 1500},
     'efficientnet': {'SLO': 40, 'base_rate': 1200}
 }
@@ -536,7 +536,7 @@ class GPUWorker:
                     
                         # Log processing metrics
                         self.logger.info(
-                            f"Processed batch of {batch.batch_size} requests for {session.model_name} "
+                            f"Processed batch of {batch.batch_size} requests for {s.model_name} "
                             f"in {processing_time:.2f}ms"
                         )
                     
