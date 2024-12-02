@@ -71,7 +71,7 @@ class SLOViewer:
             
         return metrics
 
-def display_monitor(stdscr, viewer, actor_name):
+def display_monitor(stdscr, viewer, actor):
     print("Displaying real-time SLO monitor. Press Ctrl+C to exit.")
     curses.start_color()
     curses.use_default_colors()
@@ -87,9 +87,9 @@ def display_monitor(stdscr, viewer, actor_name):
 
     try:
         print("Connecting to SLO tracker... from display_monitor")
-        slo_queue = ray.get_actor(actor_name).get_queue.remote()
+        slo_queue = actor.get_queue.remote()
     except:
-        stdscr.addstr(0, 0, "Error: Cannot connect to SLO tracker. Is the scheduler running?")
+        stdscr.addstr(0, 0, "Error: Cannot connect to SLO tracker. Is the scheduler running? : display_monitor")
         stdscr.refresh()
         time.sleep(3)
         sys.exit(1)
@@ -199,7 +199,7 @@ def main():
 
             
 
-        curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer, actor['Name']))
+        curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer, slo_tracker))
     except KeyboardInterrupt:
         print("\nExiting...")
     except Exception as e:
