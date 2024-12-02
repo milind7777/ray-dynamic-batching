@@ -461,7 +461,7 @@ class GPUWorker:
 
     def _check_for_updates(self):
         with self.lock:
-            if self.new_sessions:
+            if self.new_sessions != None:
                 # transition from old schedule to new one
                 new_model_list = [s.model_name for s, _ in self.new_sessions]
                 old_model_list = [s.model_name for s, _ in self.sessions]
@@ -503,6 +503,9 @@ class GPUWorker:
                 total_time       = self.duty_cycle
                 cycle_start_time = time.time()
 
+                if len(self.sessions) == 0:
+                    time.sleep(2/100)
+                    
                 for s, occupancy in self.sessions:
                     print(f"GPU:WORKER:execute_schedule: looking at session {s.model_name}")
                     # calculate current time slice
