@@ -811,7 +811,7 @@ class NexusScheduler:
         # also add sessions that have been created for new models
         for model, request_rate in update_info.items():
             if model not in self.sessions:
-                new_session = session(model, models_config[model]['SLO'], request_rate)
+                new_session = session(model, models_config[model]['SLO'] / 2, request_rate)
                 if new_session.request_rate > 0:
                     new_sessions.append(new_session)
 
