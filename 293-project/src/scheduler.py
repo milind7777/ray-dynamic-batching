@@ -637,6 +637,8 @@ class NexusScheduler:
 
         # Initialize SLO tracker
         self.slo_tracker = SharedSLOTracker.options(name="slo_tracker").remote()
+        print(f"Created tracker in namespace: {ray.get_runtime_context().namespace}")
+
 
         # Initialize request queues
         self.request_queues = {}
