@@ -193,6 +193,9 @@ class SharedSLOTracker:
         
     def write_metric(self, model_id: int, latency: float):
         self.queue.put((time.time(), model_id, latency))
+
+    def get_queue(self):
+        return self.queue
         
     def cleanup(self):
         pass
