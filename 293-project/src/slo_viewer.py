@@ -176,19 +176,21 @@ def display_monitor(stdscr, viewer):
 
 def main():
     try:
-        ray.init(address='auto')
+        # Find the SLO tracker by searching actors
         actors = ray.state.actors()
-        print("Active actors:", actors)
-        
-        slo_tracker = ray.get_actor("slo_tracker")
-        print("Found SLO tracker actor")
-        
-        # Test queue access
-        try:
-            queue = ray.get(slo_tracker.get_queue.remote())
-            print(f"Queue access successful. Queue size: {queue.qsize()}")
-        except Exception as e:
-            print(f"Queue access failed: {str(e)}")
+        slo_tracker_id = None
+        for actor_id, info in actors.items():
+            if info['ActorClassName'] == 'SharedSLOTracker' and info['Name'] == 'slo_tracker':
+                slo_tracker_id = actor_id
+                break
+                
+        if not slo_tracker_id:
+            print("SLO tracker not found in active actors")
+            sys.exit(1)
+            
+        slo_tracker = ray.get_actor_handle(slo_tracker_id)
+        queue = ray.get(slo_tracker.get_queue.remote())
+            
 
         viewer = SLOViewer()
         curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer))
