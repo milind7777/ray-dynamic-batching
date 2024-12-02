@@ -506,7 +506,7 @@ class GPUWorker:
         self.logger.info(f"Starting schedule execution on {self.node_id}")
     
         while self.active:
-            print(f"GPU:WORKER:execute_schedule: Starting new dutry cycle")
+            # print(f"GPU:WORKER:execute_schedule: Starting new dutry cycle")
             try:
                 total_time       = self.duty_cycle
                 cycle_start_time = time.time()
@@ -515,7 +515,7 @@ class GPUWorker:
                     time.sleep(2/100)
                     
                 for s, occupancy in self.sessions:
-                    print(f"GPU:WORKER:execute_schedule: looking at session {s.model_name}")
+                    # print(f"GPU:WORKER:execute_schedule: looking at session {s.model_name}")
                     # calculate current time slice
                     time_slice         = total_time * occupancy
                     session_start_time = time.time()
@@ -524,11 +524,11 @@ class GPUWorker:
                     queue = request_queues[s.model_name]
 
                     # Try to get batch from queue
-                    print(f"calling get batch for {s.model_name}")
-                    print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
+                    # print(f"calling get batch for {s.model_name}")
+                    # print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
                     batch = queue.get_batch(s.batch_size)
                     if batch:
-                        print(f"GPU:WORKER:execute_schedule: Valid batch found")
+                        # print(f"GPU:WORKER:execute_schedule: Valid batch found")
                         # Process batch and measure timing
                         result = self.process_batch(batch)
                         processing_time = result['processing_time']
@@ -557,7 +557,7 @@ class GPUWorker:
                     current_time    = time.time()
                     remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
                     if remaining_cycle > 0:
-                        print(f"GPU:WORKER:execute_schedule: Going to sleep for {remaining_cycle}")
+                        # print(f"GPU:WORKER:execute_schedule: Going to sleep for {remaining_cycle}")
                         time.sleep(remaining_cycle)
 
             except Exception as e:
