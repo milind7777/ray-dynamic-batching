@@ -22,10 +22,10 @@ class SLOViewer:
             'request_ids': []
         })
         
-    def get_metrics(self, slo_queue, window_size=60):
+    def get_metrics(self, queue_ref, window_size=60):
         current_time = time.time()
         cutoff_time = current_time - window_size
-        
+        slo_queue = ray.get(queue_ref)
         while slo_queue.qsize() > 0:
             try:
                 timestamp, model_id, latency, request_id = slo_queue.get_nowait()
