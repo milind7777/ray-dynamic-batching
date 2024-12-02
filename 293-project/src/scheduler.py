@@ -636,7 +636,7 @@ class NexusScheduler:
         self.logger = logging.getLogger("NexusScheduler")
 
         # Initialize SLO tracker
-        self.slo_tracker = SharedSLOTracker.options(name="slo_tracker").remote()
+        self.slo_tracker = SharedSLOTracker.options(name="slo_tracker", namespace='SLOMonitroing').remote()
         print(f"Created tracker in namespace: {ray.get_runtime_context().namespace}")
 
 

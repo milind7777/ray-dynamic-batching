@@ -9,7 +9,7 @@ from collections import defaultdict
 
 class SLOViewer:
     def __init__(self):
-        ray.init(address='auto')
+        ray.init(address='auto', namespace='SLOMonitroing')
         self.model_map = {
             hash('vit') % 1000: ('vit', 50),
             hash('resnet') % 1000: ('resnet', 200),
@@ -190,7 +190,7 @@ def main():
             print("SLO tracker not found in active actors")
             sys.exit(1)
             
-        slo_tracker = ray.get_actor(slo_tracker_id)
+        slo_tracker = ray.get_actor('slo_tracker')
         queue = ray.get(slo_tracker.get_queue.remote())
             
 
