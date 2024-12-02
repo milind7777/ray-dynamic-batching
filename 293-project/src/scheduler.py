@@ -15,7 +15,8 @@ from threading import Lock, Thread
 from queue import Queue, Empty
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
-
+from multiprocessing import shared_memory
+import numpy as np
 from nexus import (
     session,
     node,
@@ -184,6 +185,37 @@ class BatchRequest:
     request_ids: List[str]
     arrival_time: float
 
+class SharedSLOTracker:
+    def __init__(self, max_entries=10000):
+        try:
+            # Try to create new shared memory
+            self.shm = shared_memory.SharedMemory(
+                create=True, 
+                name="slo_metrics", 
+                size=max_entries * 24  # timestamp, latency, model_id
+            )
+        except FileExistsError:
+            # If already exists, connect to it
+            self.shm = shared_memory.SharedMemory(name="slo_metrics")
+            
+        self.buffer = np.ndarray((max_entries, 3), dtype=np.float64, buffer=self.shm.buf)
+        self.write_pos = 0
+        self.lock = Lock()
+        
+    def write_metric(self, model_id: int, latency: float):
+        with self.lock:
+            pos = self.write_pos % self.buffer.shape[0]
+            self.buffer[pos] = [time.time(), latency, model_id]
+            self.write_pos += 1
+            
+    def cleanup(self):
+        self.shm.close()
+        try:
+            self.shm.unlink()
+        except Exception:
+            pass
+
+
 class RequestQueue:
     """Request queue with monitoring capabilities using Ray's Queue"""
     def __init__(self, model_name: str, max_size: int = 100, batch_profile: dict = {}):
@@ -191,8 +223,13 @@ class RequestQueue:
         self.queue = RayQueue(maxsize=max_size)
         self._logger = logging.getLogger(f"Queue-{model_name}")
 
+
+        self.model_id = hash(model_name) % 1000
+
         self.slo_target = models_config[model_name]['SLO']
         self.profile = batch_profile[model_name]
+        self.slo_tracker = None  # Will be set by scheduler
+
 
         # Simple metrics tracking
         self.window_size = 60  # 1 minute window for rolling metrics
@@ -298,9 +335,13 @@ class RequestQueue:
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
         """Record batch completion with enhanced SLO tracking"""
         current_time = time.time()
-        
+        latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
+
+        # Write to shared memory tracker
+        if self.slo_tracker:
+            self.slo_tracker.write_metric(self.model_id, latency)
+
         for request_id in batch.request_ids:
-            latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
             self.latencies.append(latency)
             
             if latency > self.slo_target:
@@ -606,6 +647,9 @@ class NexusScheduler:
         self._stop_monitoring = False
         self.logger = logging.getLogger("NexusScheduler")
 
+        # Initialize SLO tracker
+        self.slo_tracker = SharedSLOTracker()
+
         # Initialize request queues
         self.request_queues = {}
         self.update_queues  = []
@@ -617,6 +661,8 @@ class NexusScheduler:
         self.futures = []
         self._init_workers()
         self._start_workers()
+
+
 
         # Initialize metrics display
         self.metrics_display = MetricsDisplay(update_interval=5.0)
@@ -633,12 +679,14 @@ class NexusScheduler:
     def _init_queues(self, max_queue_size: int):
         """Initialize request queues for all models"""
         for model in models_config.keys():
-            self.request_queues[model] = RequestQueue(
+            queue = RequestQueue(
                 model_name=model,
                 max_size=max_queue_size,
                 batch_profile=self.batching_profile
             )
 
+            queue.slo_tracker = self.slo_tracker
+            self.request_queues[model] = queue
             self.request_trackers[model] = RequestTracker(1)
         # for schedule in self.node_schedules:
         #     for session, _ in schedule['sessions']:
@@ -647,6 +695,10 @@ class NexusScheduler:
         #                 model_name=session.model_name,
         #                 max_size=max_queue_size
         #             )
+
+    def __del__(self):
+        if hasattr(self, 'slo_tracker'):
+            self.slo_tracker.cleanup()
 
     def _init_workers(self):
         """Initialize GPU workers"""
