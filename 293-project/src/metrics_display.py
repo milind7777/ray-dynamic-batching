@@ -1,4 +1,3 @@
-
 import json
 import time
 from datetime import datetime
@@ -18,7 +17,7 @@ def display_metrics():
                 with open(metrics_file, 'r') as f:
                     metrics = json.load(f)
                 
-                #clear_screen()
+                clear_screen()
                 print("=== Real-time SLO Metrics ===")
                 print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 print("=" * 50)
@@ -27,28 +26,28 @@ def display_metrics():
                     print(f"\nModel: {model_name}")
                     print("-" * 40)
                     
-                    # Calculate SLO compliance
-                    compliance = 100.0
-                    if stats['total_requests'] > 0:
-                        compliance = ((stats['total_requests'] - stats['slo_violations']) / 
-                                    stats['total_requests'] * 100)
+                    total = stats['total_requests']
+                    violations = stats['slo_violations']
+                    compliance = 100.0 if total == 0 else ((total - violations) / total * 100)
                     
                     print(f"  Queue Size: {stats['queue_size']}")
-                    print(f"  Total Requests: {stats['total_requests']}")
-                    print(f"  Dropped Requests: {stats['dropped_requests']}")
-                    print(f"  SLO Violations: {stats['slo_violations']}")
+                    print(f"  Total Requests: {total:,}")
+                    print(f"  Dropped Requests: {stats['dropped_requests']:,}")
+                    print(f"  SLO Violations: {violations:,}")
                     print(f"  SLO Compliance: {compliance:.2f}%")
                     print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
                     print(f"  P95 Latency: {stats['p95_latency']:.2f}ms")
+                    print(f"  P99 Latency: {stats['p99_latency']:.2f}ms")
                     
-                    # Status indicators
-                    queue_status = "✓" if stats['queue_size'] < 1600 else "!"  # 80% of 2000
-                    slo_status = "✓" if compliance >= 95 else "!" if compliance >= 90 else "✗"
-                    print(f"  Queue Status: {queue_status}  SLO Status: {slo_status}")
+                    # Status indicators with more granular thresholds
+                    queue_status = "✓" if stats['queue_size'] < 1600 else "!"
+                    slo_status = "✓" if compliance >= 98 else "!" if compliance >= 95 else "✗"
+                    
+                    print(f"  Status: Queue={queue_status} SLO={slo_status}")
                 
                 print("\n" + "=" * 50)
                 print("Status: ✓ Good  ! Warning  ✗ Critical")
-            
+                
             time.sleep(1)
             
         except Exception as e:

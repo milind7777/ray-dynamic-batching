@@ -209,6 +209,14 @@ class RequestQueue:
 
         self.dropped_requests = 0
 
+        self.metrics = {
+            'total_requests': 0,
+            'dropped_requests': 0,
+            'slo_violations': 0,
+            'latencies': deque(maxlen=1000),
+            'queue_size': 0
+        }
+
         
     def empty(self) -> bool:
         """Check if queue is empty"""
@@ -229,15 +237,13 @@ class RequestQueue:
         """Add request to queue with monitoring"""
         try:
             if self.queue.full():
-                self._logger.warning(f"Queue full for {self.model_name}")
-                self.dropped_requests += 1
+                self.metrics['dropped_requests'] += 1
                 return False
             
             current_time = time.time()
             self.queue.put((request_id, input_tensor, current_time))
-            self.request_timestamps.append(current_time)
-            self._update_window_metrics(current_time)
-            self.total_requests += 1
+            self.metrics['total_requests'] += 1
+            self.metrics['queue_size'] = self.queue.qsize()
             return True
         except Exception as e:
             self._logger.error(f"Error adding request: {e}")
@@ -299,62 +305,43 @@ class RequestQueue:
         return None
     
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
-        """Record batch completion with enhanced SLO tracking"""
-        current_time = time.time()
+        """Record batch completion metrics"""
+        latency = (completion_time - batch.arrival_time) * 1000  # ms
         
-        for request_id in batch.request_ids:
-            latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
-            self.latencies.append(latency)
-            
+        for _ in batch.request_ids:
             if latency > self.slo_target:
-                self.slo_violations += 1
-                self.current_window_violations += 1
-                
-                self._logger.warning(
-                    f"SLO violation - Request ID: {request_id}, "
-                    f"Latency: {latency:.2f}ms, Target: {self.slo_target}ms"
-                )
-                
-        self._update_window_metrics(current_time)
+                self.metrics['slo_violations'] += 1
+            self.metrics['latencies'].append(latency)
+        
+        self.metrics['queue_size'] = self.queue.qsize()
     
     def get_stats(self) -> Dict:
-        """Get enhanced queue statistics"""
-        current_time = time.time()
-        self._update_window_metrics(current_time)
-        
-        latencies = list(self.latencies)
+        """Get queue statistics"""
+        latencies = list(self.metrics['latencies'])
         if not latencies:
             return {
-                'total_requests': self.total_requests,
-                'dropped_requests': self.dropped_requests,
-                'slo_violations': self.slo_violations,
-                'queue_size': self.queue.qsize(),
-                'window_violation_rate': 0.0,
+                'total_requests': self.metrics['total_requests'],
+                'dropped_requests': self.metrics['dropped_requests'], 
+                'slo_violations': self.metrics['slo_violations'],
+                'queue_size': self.metrics['queue_size'],
                 'avg_latency': 0,
                 'p95_latency': 0,
                 'p99_latency': 0
             }
-        # Calculate percentiles properly
+
+        # Calculate latency metrics
         sorted_latencies = sorted(latencies)
         p95_idx = int(len(sorted_latencies) * 0.95)
         p99_idx = int(len(sorted_latencies) * 0.99)
-        
-        window_violation_rate = (
-            (self.current_window_violations / self.current_window_requests * 100)
-            if self.current_window_requests > 0 else 0
-        )
-        
+
         return {
-            'total_requests': self.total_requests,
-            'dropped_requests': self.dropped_requests,
-            'slo_violations': self.slo_violations,
-            'queue_size': self.queue.qsize(),
-            'window_violation_rate': window_violation_rate,
+            'total_requests': self.metrics['total_requests'],
+            'dropped_requests': self.metrics['dropped_requests'],
+            'slo_violations': self.metrics['slo_violations'], 
+            'queue_size': self.metrics['queue_size'],
             'avg_latency': sum(latencies) / len(latencies),
             'p95_latency': sorted_latencies[p95_idx],
-            'p99_latency': sorted_latencies[p99_idx],
-            'current_window_requests': self.current_window_requests,
-            'current_window_violations': self.current_window_violations
+            'p99_latency': sorted_latencies[p99_idx]
         }
 
 @ray.remote(num_gpus=1)
@@ -737,7 +724,7 @@ class NexusScheduler:
     #     """Record an incoming request for a model"""
     #     if model_name not in self.request_trackers:
     #         with self.lock:
-    #             if model_name not in self.request_trackers:
+    #             if (model_name not in self.request_trackers):
     #                 self.request_trackers[model_name] = RequestTracker()
     #                 self.metrics['total_requests'][model_name] = 0
     #     self.request_trackers[model_name].record_request()
