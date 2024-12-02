@@ -889,67 +889,52 @@ class NexusScheduler:
 
 
 class MetricsDisplay:
-    """Simple console-based display of SLO metrics for all model queues"""
+    """Metrics display manager that launches display in separate terminal"""
     def __init__(self, update_interval: float = 1.0):
         self.update_interval = update_interval
         self.stop_display = False
-        self.display_thread = None
-        self.lock = Lock()
+        self.metrics_process = None
+        self.shared_queue = Queue()
         
     def start(self, request_queues: Dict[str, RequestQueue]):
-        """Start metrics display thread"""
-        self.stop_display = False
-        self.display_thread = Thread(
-            target=self._console_display_loop, 
-            args=(request_queues,),
-            daemon=True
-        )
-        self.display_thread.start()
+        """Start metrics display in new terminal"""
+        display_script = os.path.join(os.path.dirname(__file__), 'metrics_display.py')
         
+        # Start new terminal with metrics display script
+        if sys.platform == 'darwin':  # macOS
+            cmd = ['osascript', '-e', f'tell app "Terminal" to do script "python {display_script}"']
+        elif sys.platform == 'linux':  # Linux
+            cmd = ['gnome-terminal', '--', 'python', display_script]
+        else:  # Windows
+            cmd = ['start', 'cmd', '/c', 'python', display_script]
+            
+        try:
+            self.metrics_process = subprocess.Popen(cmd)
+            # Start thread to collect and send metrics
+            self.collector_thread = Thread(target=self._collect_metrics, 
+                                        args=(request_queues,),
+                                        daemon=True)
+            self.collector_thread.start()
+        except Exception as e:
+            logging.error(f"Failed to start metrics display: {e}")
+            
     def stop(self):
         """Stop metrics display"""
         self.stop_display = True
-        if self.display_thread:
-            self.display_thread.join()
+        if self.metrics_process:
+            self.metrics_process.terminate()
             
-    def _console_display_loop(self, request_queues: Dict[str, RequestQueue]):
-        """Main display loop using simple console output"""
+    def _collect_metrics(self, request_queues: Dict[str, RequestQueue]):
+        """Collect metrics and write to shared file"""
+        metrics_file = "metrics.json"
         while not self.stop_display:
-            # Clear screen using ANSI escape codes
-            print("\033[2J\033[H", end="")
-            
-            print("=== Real-time SLO Metrics ===")
-            print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print("=" * 50)
-            
+            metrics = {}
             for model_name, queue in request_queues.items():
-                stats = queue.get_stats()
-                slo_target = queue.slo_target
-                
-                # Calculate SLO compliance
-                compliance = 100.0
-                if stats['total_requests'] > 0:
-                    compliance = ((stats['total_requests'] - stats['slo_violations']) / 
-                                stats['total_requests'] * 100)
-                
-                print(f"\nModel: {model_name}")
-                print("-" * 40)
-                print(f"  SLO Target: {slo_target}ms")
-                print(f"  Queue Size: {stats['queue_size']}")
-                print(f"  Total Requests: {stats['total_requests']}")
-                print(f"  Dropped Requests: {stats['dropped_requests']}")
-                print(f"  SLO Violations: {stats['slo_violations']}")
-                print(f"  SLO Compliance: {compliance:.2f}%")
-                print(f"  Average Latency: {stats['avg_latency']:.2f}ms")
-                print(f"  P95 Latency: {stats['p95_latency']:.2f}ms")
-                
-                # Simple status indicators
-                queue_status = "✓" if stats['queue_size'] < queue.queue.maxsize * 0.8 else "!"
-                slo_status = "✓" if compliance >= 95 else "!" if compliance >= 90 else "✗"
-                print(f"  Queue Status: {queue_status}  SLO Status: {slo_status}")
+                metrics[model_name] = queue.get_stats()
             
-            print("\n" + "=" * 50)
-            print("Status: ✓ Good  ! Warning  ✗ Critical")
+            # Write current metrics to file
+            with open(metrics_file, 'w') as f:
+                json.dump(metrics, f)
             
             time.sleep(self.update_interval)
 
