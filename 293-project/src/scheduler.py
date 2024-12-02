@@ -216,7 +216,7 @@ class RequestQueue:
             'slo_violations': 0,
             'latencies': [],  # Change to list for better JSON serialization
             'queue_size': 0,
-            'last_latency': 0.0  # Add last latency for debugging
+            'last_latency': 0.0 , # Add last latency for debugging
         }
 
         
@@ -246,10 +246,15 @@ class RequestQueue:
             self.queue.put((request_id, input_tensor, current_time))
             self.metrics['total_requests'] += 1
             self.metrics['queue_size'] = self.queue.qsize()
+
+         
+
             return True
         except Exception as e:
             self._logger.error(f"Error adding request: {e}")
             return False
+        
+    
     
     def get_batch(self, batch_size: int) -> Optional[BatchRequest]:
         """Get batch of requests with timeout handling"""
@@ -619,7 +624,7 @@ class NexusScheduler:
 
         # Initialize metrics display
         self.metrics_display = MetricsDisplay(update_interval=5.0)
-        self.metrics_display.start(self.request_queues)
+        self.metrics_display.start(self.request_queues, self.request_trackers)
 
         # Add metrics tracking
         self.metrics: Dict[str, Dict] = {
@@ -895,7 +900,7 @@ class MetricsDisplay:
         self.metrics_process = None
         self.shared_queue = Queue()
         
-    def start(self, request_queues: Dict[str, RequestQueue]):
+    def start(self, request_queues: Dict[str, RequestQueue], request_trackers: Dict[str, RequestTracker]):
         """Start metrics display in new terminal"""
         display_script = os.path.join(os.path.dirname(__file__), 'metrics_display.py')
         
@@ -911,7 +916,7 @@ class MetricsDisplay:
             self.metrics_process = subprocess.Popen(cmd)
             # Start thread to collect and send metrics
             self.collector_thread = Thread(target=self._collect_metrics, 
-                                        args=(request_queues,),
+                                        args=(request_queues, request_trackers),
                                         daemon=True)
             self.collector_thread.start()
         except Exception as e:
@@ -923,14 +928,16 @@ class MetricsDisplay:
         if self.metrics_process:
             self.metrics_process.terminate()
             
-    def _collect_metrics(self, request_queues: Dict[str, RequestQueue]):
+    def _collect_metrics(self, request_queues: Dict[str, RequestQueue], request_trackers: Dict[str, RequestTracker]):
         """Collect metrics and write to shared file"""
         metrics_file = "metrics.json"
         while not self.stop_display:
             metrics = {}
             for model_name, queue in request_queues.items():
-                metrics[model_name] = queue.get_stats()
-            
+                stats = queue.get_stats()
+
+                stats['request_rate'] = request_trackers[model_name].get_request_rate()
+                metrics[model_name] = stats
             # Write current metrics to file
             with open(metrics_file, 'w') as f:
                 json.dump(metrics, f)
