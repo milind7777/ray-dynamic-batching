@@ -455,7 +455,9 @@ class GPUWorker:
             raise
     
     def _update_schedule(self, new_sessions: List[session], new_duty_cycle: float):
+        print(f"GPUWORKER:_update_schedule: inside update schedule remote call")
         with self.lock:
+            print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
             self.new_sessions   = new_sessions
             self.new_duty_cycle = new_duty_cycle
 
@@ -857,13 +859,13 @@ class NexusScheduler:
             print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
             print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
             print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].duty_cycle}")
-            self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle)
+            self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle).get()
 
         if l > n:
             # stop all worker from n:l-1
             for i in range(n, l):
                 print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i} to STOP")
-                self.workers[i]._update_schedule.remote([], 1)
+                self.workers[i]._update_schedule.remote([], 1).get()
 
         if n < l:
             # launch new worker node
