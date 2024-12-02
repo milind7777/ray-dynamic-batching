@@ -244,11 +244,11 @@ class RequestQueue:
         earliest_arrival = float('inf')
         
         try:
-            '''available = min(batch_size, self.queue.qsize())
+            available = min(batch_size, self.queue.qsize())
             if available == 0:
                 return None
                 
-            
+            '''
             batch = self.queue.get_batch(available, timeout=0)
             for (request_id, input_tensor, arrival_time) in batch:
             # for _ in range(available):
@@ -266,7 +266,7 @@ class RequestQueue:
             #     inputs.append(input_tensor)
             #     earliest_arrival = min(earliest_arrival, arrival_time)
             #     self._pending_count -= 1'''
-            batch = self.queue.get_nowait_batch(batch_size)
+            batch = self.queue.get_nowait_batch(available)
             if not batch:
                 return None
             
@@ -417,7 +417,6 @@ class GPUWorker:
             
             start_time = time.time()
 
-            print(f"process_batch")
             model = self.models[batch.model_name]
             #inputs = torch.stack(batch.inputs).to(f'cuda:{self.gpu_id}')
             inputs = torch.stack(batch.inputs).cuda()  # Just use cuda() since only one GPU is visible
@@ -455,8 +454,8 @@ class GPUWorker:
             raise
     
     def _update_schedule(self, new_sessions: List[session], new_duty_cycle: float):
-        print(f"GPUWORKER:_update_schedule: inside update schedule remote call")      
-        print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
+        # print(f"GPUWORKER:_update_schedule: inside update schedule remote call")      
+        # print(f"GPUWORKER:_update_schedule: new sessions length {len(new_sessions)}")
         self.new_sessions   = new_sessions
         self.new_duty_cycle = new_duty_cycle
 
@@ -697,7 +696,6 @@ class NexusScheduler:
             return
         
         self._stop_monitoring = False
-        print(f"")
         self.monitoring_thread = Thread(target=self._monitor_request_rates, daemon=True)
         self.monitoring_thread.start()
         self.logger.info("Request rate monitoring started")
@@ -868,16 +866,16 @@ class NexusScheduler:
         n = len(new_nodes)
         update_refs = []
         for i in range(min(l, n)):
-            print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
-            print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
-            print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].duty_cycle}")
+            # print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
+            # print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
+            # print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].duty_cycle}")
             self.update_queues[i].put((new_nodes[i].node_sessions, new_nodes[i].duty_cycle, time.time()))
             # update_refs.append(self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle))
 
         if l > n:
             # stop all worker from n:l-1
             for i in range(n, l):
-                print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i} to STOP")
+                # print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i} to STOP")
                 self.update_queues[i].put(([], 1, time.time()))
                 # update_refs.append(self.workers[i]._update_schedule.remote([], 1))
 
