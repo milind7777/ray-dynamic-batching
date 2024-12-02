@@ -186,35 +186,14 @@ class BatchRequest:
     arrival_time: float
 
 class SharedSLOTracker:
-    def __init__(self, max_entries=10000):
-        try:
-            # Try to create new shared memory
-            self.shm = shared_memory.SharedMemory(
-                create=True, 
-                name="slo_metrics", 
-                size=max_entries * 24  # timestamp, latency, model_id
-            )
-        except FileExistsError:
-            # If already exists, connect to it
-            self.shm = shared_memory.SharedMemory(name="slo_metrics")
-            
-        self.buffer = np.ndarray((max_entries, 3), dtype=np.float64, buffer=self.shm.buf)
-        self.write_pos = 0
-        self.lock = Lock()
+    def __init__(self):
+        self.queue = RayQueue()
         
     def write_metric(self, model_id: int, latency: float):
-        with self.lock:
-            pos = self.write_pos % self.buffer.shape[0]
-            self.buffer[pos] = [time.time(), latency, model_id]
-            self.write_pos += 1
-            
+        self.queue.put((time.time(), model_id, latency))
+        
     def cleanup(self):
-        self.shm.close()
-        try:
-            self.shm.unlink()
-        except Exception:
-            pass
-
+        pass
 
 class RequestQueue:
     """Request queue with monitoring capabilities using Ray's Queue"""
@@ -678,6 +657,8 @@ class NexusScheduler:
     
     def _init_queues(self, max_queue_size: int):
         """Initialize request queues for all models"""
+        self.slo_queue = RayQueue()  # Create shared SLO queue
+        ray.get_actor("slo_tracker").set_queue.remote(self.slo_queue)  # Register queue with Ray
         for model in models_config.keys():
             queue = RequestQueue(
                 model_name=model,
@@ -685,7 +666,7 @@ class NexusScheduler:
                 batch_profile=self.batching_profile
             )
 
-            queue.slo_tracker = self.slo_tracker
+            queue.slo_queue = self.slo_queue  # Pass shared queue to RequestQueue
             self.request_queues[model] = queue
             self.request_trackers[model] = RequestTracker(1)
         # for schedule in self.node_schedules:
