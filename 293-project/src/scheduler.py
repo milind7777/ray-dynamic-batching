@@ -854,18 +854,20 @@ class NexusScheduler:
 
         l = len(self.workers)
         n = len(new_nodes)
-
+        update_refs = []
         for i in range(min(l, n)):
             print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
             print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
             print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].duty_cycle}")
-            self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle).get()
+            update_refs.append(self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle))
 
         if l > n:
             # stop all worker from n:l-1
             for i in range(n, l):
                 print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i} to STOP")
-                self.workers[i]._update_schedule.remote([], 1).get()
+                update_refs.append(self.workers[i]._update_schedule.remote([], 1))
+
+        ray.get(update_refs)
 
         if n < l:
             # launch new worker node
