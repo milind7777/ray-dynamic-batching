@@ -9,7 +9,7 @@ from collections import defaultdict
 
 class SLOViewer:
     def __init__(self):
-        ray.init(address='auto')
+        ray.init(address='auto', namespace='default')
         self.model_map = {
             hash('vit') % 1000: ('vit', 50),
             hash('resnet') % 1000: ('resnet', 200),
@@ -177,6 +177,7 @@ def display_monitor(stdscr, viewer):
 
 def main():
     try:
+        viewer = SLOViewer()
         slo_tracker = ray.get_actor("slo_tracker")
         print("Found SLO tracker actor")
         
@@ -186,8 +187,7 @@ def main():
             print(f"Queue access successful. Queue size: {queue.qsize()}")
         except Exception as e:
             print(f"Queue access failed: {str(e)}")
-            
-        viewer = SLOViewer()
+
         curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer))
     except KeyboardInterrupt:
         print("\nExiting...")
