@@ -322,7 +322,7 @@ class RequestQueue:
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
         """Record batch completion with enhanced SLO tracking"""
         current_time = time.time()
-        latency = (completion_time - batch.arrival_time) * 1000  # Convert to ms
+        latency = (completion_time - batch.batch_arrival_time) * 1000  # Convert to ms
 
         
 
@@ -479,7 +479,7 @@ class GPUWorker:
                     'outputs': outputs.cpu(),
                     'request_ids': batch.request_ids,
                     'processing_time': processing_time,
-                    'latency': time.time() - batch.arrival_time
+                    'latency': time.time() - batch.batch_arrival_time
                 }
         except Exception as e:
             self.logger.error(f"Error processing batch: {e}")
@@ -653,8 +653,8 @@ class NexusScheduler:
 
 
         # Initialize metrics display
-        self.metrics_display = MetricsDisplay(update_interval=5.0)
-        self.metrics_display.start(self.request_queues)
+        #self.metrics_display = MetricsDisplay(update_interval=5.0)
+        #self.metrics_display.start(self.request_queues)
 
         # Add metrics tracking
         self.metrics: Dict[str, Dict] = {
