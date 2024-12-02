@@ -900,7 +900,7 @@ class MetricsDisplay:
         self.metrics_process = None
         self.shared_queue = Queue()
         
-    def start(self, request_queues: Dict[str, RequestQueue]):
+    def start(self, request_queues: Dict[str, RequestQueue], request_trackers: Dict[str, RequestTracker]):
         """Start metrics display in new terminal"""
         display_script = os.path.join(os.path.dirname(__file__), 'metrics_display.py')
         
@@ -916,7 +916,7 @@ class MetricsDisplay:
             self.metrics_process = subprocess.Popen(cmd)
             # Start thread to collect and send metrics
             self.collector_thread = Thread(target=self._collect_metrics, 
-                                        args=(request_queues,),
+                                        args=(request_queues, request_trackers),
                                         daemon=True)
             self.collector_thread.start()
         except Exception as e:
