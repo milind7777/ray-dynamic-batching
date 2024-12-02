@@ -18,7 +18,7 @@ def display_metrics():
                 with open(metrics_file, 'r') as f:
                     metrics = json.load(f)
                 
-                clear_screen()
+                #clear_screen()
                 print("=== Real-time SLO Metrics ===")
                 print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 print("=" * 50)
