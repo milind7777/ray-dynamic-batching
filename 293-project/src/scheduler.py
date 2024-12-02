@@ -460,7 +460,16 @@ class GPUWorker:
         self.new_sessions   = new_sessions
         self.new_duty_cycle = new_duty_cycle
 
-    def _check_for_updates(self):
+    def _check_for_updates(self, update_queue: RayQueue):
+        if update_queue.qsize() == 0:
+            return False
+        
+        while update_queue.qsize() > 1:
+            _ = update_queue.get()
+        
+        latest = update_queue.get()
+        self.new_sessions = latest[0]
+        self.duty_cycle   = latest[1]
         
         if self.new_sessions != None:
             # transition from old schedule to new one
@@ -492,9 +501,8 @@ class GPUWorker:
             self.new_duty_cycle = None
 
             return True
-        return False
 
-    def execute_schedule(self, request_queues: Dict[str, RequestQueue]):
+    def execute_schedule(self, request_queues: Dict[str, RequestQueue], update_queue: RayQueue):
         """Execute round-robin schedule with enhanced monitoring"""
         self.logger.info(f"Starting schedule execution on {self.node_id}")
     
@@ -545,7 +553,7 @@ class GPUWorker:
                         self.logger.info(f"Node {self.node_id} stats: {self.get_stats()}")
                 
                 # check if worker needs to update node session at the end of the duty cycle
-                if not self._check_for_updates():
+                if not self._check_for_updates(update_queue):
                     # wait for duty cycle to finish
                     current_time    = time.time()
                     remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
@@ -598,6 +606,7 @@ class NexusScheduler:
 
         # Initialize request queues
         self.request_queues = {}
+        self.update_queues  = []
         self._init_queues(2000)
         
         # Initialize workers
@@ -655,6 +664,8 @@ class NexusScheduler:
                     model_registry=self.model_registry
                 )
                 self.workers.append(worker)
+
+                self.update_queues.append(RayQueue(maxsize=0))
             except Exception as e:
                 self.logger.error(f"Error initializing worker: {e}")
                     
@@ -666,8 +677,10 @@ class NexusScheduler:
 
         try:
             # Create ray actors and start execution
+            ind = 0
             for worker in self.workers:
-                self.futures.append(worker.execute_schedule.remote(self.request_queues))
+                self.futures.append(worker.execute_schedule.remote(self.request_queues, self.update_queues[ind]))
+                ind+=1
         
             # Start monitoring thread
             # self.monitoring_thread = threading.Thread(target=self._monitor_system)
@@ -858,15 +871,15 @@ class NexusScheduler:
             print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
             print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
             print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].duty_cycle}")
-            update_refs.append(self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle))
+            self.update_queues[i].put((new_nodes[i].node_sessions, new_nodes[i].duty_cycle, time.time()))
+            # update_refs.append(self.workers[i]._update_schedule.remote(new_nodes[i].node_sessions, new_nodes[i].duty_cycle))
 
         if l > n:
             # stop all worker from n:l-1
             for i in range(n, l):
                 print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i} to STOP")
-                update_refs.append(self.workers[i]._update_schedule.remote([], 1))
-
-        ray.get(update_refs)
+                self.update_queues[i].put(([], 1, time.time()))
+                # update_refs.append(self.workers[i]._update_schedule.remote([], 1))
 
         if n < l:
             # launch new worker node
