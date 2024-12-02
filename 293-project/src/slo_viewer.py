@@ -86,6 +86,7 @@ def display_monitor(stdscr, viewer, actor_name):
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
+        print("Connecting to SLO tracker... from display_monitor")
         slo_queue = ray.get_actor(actor_name).get_queue.remote()
     except:
         stdscr.addstr(0, 0, "Error: Cannot connect to SLO tracker. Is the scheduler running?")
