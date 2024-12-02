@@ -71,7 +71,8 @@ class SLOViewer:
             
         return metrics
 
-def display_monitor(stdscr, viewer):
+def display_monitor(stdscr, viewer, actor_name):
+    print("Displaying real-time SLO monitor. Press Ctrl+C to exit.")
     curses.start_color()
     curses.use_default_colors()
     curses.init_pair(1, curses.COLOR_RED, -1)
@@ -85,7 +86,7 @@ def display_monitor(stdscr, viewer):
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
-        slo_queue = ray.get_actor("slo_tracker").get_queue.remote()
+        slo_queue = ray.get_actor(actor_name).get_queue.remote()
     except:
         stdscr.addstr(0, 0, "Error: Cannot connect to SLO tracker. Is the scheduler running?")
         stdscr.refresh()
@@ -181,20 +182,23 @@ def main():
         # Find the SLO tracker by searching actors
         actors = ray.state.actors()
         slo_tracker_id = None
+        actor = {}
         for actor_id, info in actors.items():
             if info['ActorClassName'] == 'SharedSLOTracker' and info['Name'] == 'slo_tracker':
                 slo_tracker_id = actor_id
+                actor = info
                 break
                 
         if not slo_tracker_id:
             print("SLO tracker not found in active actors")
             sys.exit(1)
             
-        slo_tracker = ray.get_actor('slo_tracker')
-        queue = ray.get(slo_tracker.get_queue.remote())
+        slo_tracker = ray.get_actor(actor['Name'])
+        print(f"Found SLO tracker actor: {actor['Name']} (ID: {slo_tracker_id})")
+
             
 
-        curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer))
+        curses.wrapper(lambda stdscr: display_monitor(stdscr, viewer, actor['Name']))
     except KeyboardInterrupt:
         print("\nExiting...")
     except Exception as e:
