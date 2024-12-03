@@ -74,12 +74,12 @@ class WorkloadGenerator:
             if pattern['type'] == 'slope':
                 if elapsed_time < 20:
                     rate = (elapsed_time) * pattern['slope']
-                elif elapsed_time < 40:
-                    rate = 20 * pattern['slope']
-                elif elapsed_time < 60:
-                    rate = 20 * pattern['slope'] + (elapsed_time - 40) * pattern['slope']
-                elif elapsed_time < 80:
-                    rate = 40 * pattern['slope']
+                # elif elapsed_time < 40:
+                #     rate = 20 * pattern['slope']
+                # elif elapsed_time < 60:
+                #     rate = 20 * pattern['slope'] + (elapsed_time - 40) * pattern['slope']
+                # elif elapsed_time < 80:
+                #     rate = 40 * pattern['slope']
                 
                 second_start_time = time.time()
                 for i in range(int(rate)):
@@ -135,9 +135,9 @@ def main():
     model_patterns = {
         'resnet': {
             'type': 'slope',
-            'base': 500,
-            'final': 1000,
-            'slope': 25
+            'base': 100,
+            'final': 100,
+            'slope': 5
         }
     }
 
