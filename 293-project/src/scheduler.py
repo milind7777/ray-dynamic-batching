@@ -316,17 +316,19 @@ class RequestQueue:
         latency = (completion_time - batch.arrival_time) * 1000  # ms
         
         # Update metrics atomically
+        count = 0
         self.metrics['last_latency'] = latency
         for _ in batch.request_ids:
             if latency > self.slo_target:
                 self.metrics['slo_violations'] += 1
+                count += 1
                 print(f"Queue: {self.model_name} SLO violation: {latency:.2f}ms vs target {self.slo_target}ms")
             if len(self.metrics['latencies']) >= 1000:
                 self.metrics['latencies'] = self.metrics['latencies'][100:]  # Keep last 900 entries
             self.metrics['latencies'].append(latency)
         
         self.metrics['queue_size'] = self.queue.qsize()
-        return self.metrics['slo_violations']
+        return count
     
     def get_stats(self) -> Dict:
         """Get queue statistics with real latency data"""
