@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 import math, copy
 
+gpu_mem = 11
+
 class session:
     """
     Session class representing a model deployment request
@@ -67,7 +69,7 @@ class node:
     node_sessions: list[(session, float)] = [] # (session, occupancy)
     duty_cycle: float = float('inf')
 
-    def __init__(self, node_sessions: list[(session, float)] = None, duty_cycle: float = None, gpu_type: str = 'A6000', gpu_mem: float = 11):
+    def __init__(self, node_sessions: list[(session, float)] = None, duty_cycle: float = None, gpu_type: str = 'A6000', gpu_mem: float = gpu_mem):
         self.gpu_type = gpu_type
         self.gpu_mem  = gpu_mem
         
@@ -143,7 +145,18 @@ class nexus:
             
             by_latency = attrgetter('avg_latency_ms')
             max_batch_ind  = bisect(latency_list, s.latency_SLO/2, key=by_latency)
-            # print(f"SMAX BATCH: {max_batch_ind}")
+
+            memory_entry = namedtuple('memory_entry', ('batch_size', 'peak_memory_mb'))
+            memory_list  = [memory_entry(key, self.batching_profile[s.model_name][key]['peak_memory_mb']/1024) for key in self.batching_profile[s.model_name].keys()]
+
+            by_memory = attrgetter('peak_memory_mb')
+            max_batch_mem_ind = bisect(memory_list, gpu_mem, key=by_memory)
+
+            print(f"SMAX BATCH: {max_batch_ind}")
+            print(f"SMAX BATCH: {max_batch_mem_ind}")
+
+            max_batch_ind = min(max_batch_ind, max_batch_mem_ind)
+
             if max_batch_ind == 0:
                 max_batch_ind = 1
             max_batch_size, max_latency = latency_list[max_batch_ind-1]
