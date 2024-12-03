@@ -45,8 +45,8 @@ class session:
         self.creation_time = datetime.now()
 
     def print_session_pretty(self):
-        print(f"Model name: {self.model_name}, SLO: {round(self.latency_SLO, 2)}ms, "
-              f"request rate: {round(self.request_rate, 2)}, batch size: {self.batch_size}")
+        print(f"Model name: {self.model_name}, SLO: {round(self.latency_SLO, 0)}ms, "
+              f"request rate: {round(self.request_rate, 0)}, batch size: {self.batch_size}")
 
     def to_dict(self) -> dict:
         """Convert session to dictionary for logging"""
@@ -90,10 +90,10 @@ class node:
     def print_node_pretty(self):
         print(f"---------------------------------------------------------------------------")
         print(f"Node gpu type: {self.gpu_type}, Node gpu memory: {self.gpu_mem}GB")
-        print(f"Node duty cycle: {round(self.duty_cycle, 2)}ms")
+        print(f"Node duty cycle: {round(self.duty_cycle, 0)}ms")
         print(f"Node sessions: {len(self.node_sessions)}")
         for i, (s, occ) in enumerate(self.node_sessions):
-            print(f"session number {i+1} has occupancy: {round(occ * 100, 2)}%")
+            print(f"session number {i+1} has occupancy: {round(occ * 100, 0)}%")
             s.print_session_pretty()
         print(f"---------------------------------------------------------------------------")
 

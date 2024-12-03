@@ -861,7 +861,9 @@ class NexusScheduler:
             final_nodes = [new_nodes[i-1] for i in best_arrangment]
 
         # update sessions and nodes in scheduler
-        self.sessions = new_sessions
+        self.sessions = {}
+        for s, _ in new_sessions:
+            self.sessions[s.model_name] = s
         self.nodes    = final_nodes
 
         self._update_workers(final_nodes)
