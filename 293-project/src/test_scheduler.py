@@ -20,8 +20,8 @@ from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 
 models_config = {
-    'vit': {'SLO': 1000, 'base_rate':0},        # (model_name, SLO, initial_rate)
-    'resnet': {'SLO': 400, 'base_rate': 0},
+    'vit': {'SLO': 4000, 'base_rate':0},        # (model_name, SLO, initial_rate)
+    'resnet': {'SLO': 2000, 'base_rate': 0},
     'shufflenet': {'SLO': 30, 'base_rate': 0},
     'efficientnet': {'SLO': 40, 'base_rate': 0}
 }
