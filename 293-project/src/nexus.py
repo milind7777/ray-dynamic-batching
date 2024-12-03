@@ -67,7 +67,7 @@ class node:
     node_sessions: list[(session, float)] = [] # (session, occupancy)
     duty_cycle: float = float('inf')
 
-    def __init__(self, node_sessions: list[(session, float)] = None, duty_cycle: float = None, gpu_type: str = 'A6000', gpu_mem: float = 48):
+    def __init__(self, node_sessions: list[(session, float)] = None, duty_cycle: float = None, gpu_type: str = 'A6000', gpu_mem: float = 11):
         self.gpu_type = gpu_type
         self.gpu_mem  = gpu_mem
         
