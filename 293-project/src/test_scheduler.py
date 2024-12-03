@@ -137,7 +137,7 @@ def main():
             'type': 'slope',
             'base': 100,
             'final': 100,
-            'slope': 5
+            'slope': 1
         }
     }
 
