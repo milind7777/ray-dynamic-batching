@@ -223,7 +223,7 @@ class nexus:
             max_batch_ind  = bisect(request_latency, s.latency_SLO, key=by_latency)
             max_batch_size, max_latency = request_latency[max_batch_ind-1]
 
-            duty_cycle = (max_batch_size/s.request_rate) / 1000
+            duty_cycle = (max_batch_size/s.request_rate) * 1000
             occupancy  = max_latency/duty_cycle
 
             s.batch_size = max_batch_size
