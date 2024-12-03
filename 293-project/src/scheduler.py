@@ -877,9 +877,11 @@ class NexusScheduler:
             best_arrangment = None
             min_transfers   = None
             for arrangement in arrangments:
+                print(f"ARRANGEMENT: {arrangement}")
                 current_transfers = self.get_transfers(old_nodes[:n], [new_nodes[i-1] for i in arrangement])
                 if min_transfers is None or min_transfers > current_transfers:
                     best_arrangment = arrangement
+                    print(f"UPDATED BEST ARRANGEMENT: {best_arrangment}")
                     min_transfers   = current_transfers
 
             final_nodes = [new_nodes[i-1] for i in best_arrangment]
