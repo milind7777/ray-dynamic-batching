@@ -3,6 +3,7 @@ from scheduler import (
 )
 
 import ray
+import sys
 import time
 import copy
 import torch
@@ -94,7 +95,7 @@ class WorkloadGenerator:
             if time_left>0:
                 time.sleep(time_left)
         
-def main():
+def main(args):
     # Load batch profiles
     profiling_dir = "../profiling"
 
@@ -181,14 +182,15 @@ def main():
 
     time.sleep(10)
 
-    test1 = WorkloadGenerator(scheduler, model_patterns1)
-    test1._start_load()
-
-    # test2 = WorkloadGenerator(scheduler, model_patterns2)
-    # test2._start_load()
-
-    # test3 = WorkloadGenerator(scheduler, model_patterns3)
-    # test3._start_load()
+    if args[0] == 1:
+        test1 = WorkloadGenerator(scheduler, model_patterns1)
+        test1._start_load()
+    elif args[0] == 2:
+        test2 = WorkloadGenerator(scheduler, model_patterns2)
+        test2._start_load()
+    elif args[0] == 3:
+        test3 = WorkloadGenerator(scheduler, model_patterns3)
+        test3._start_load()
 
 if __name__ == '__main__':
-    main()
+    main(sys.args[1:])
