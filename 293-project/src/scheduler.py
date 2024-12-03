@@ -39,7 +39,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 model_registry = {
     'vit': models.vit_b_16(pretrained=True),  # Using direct torchvision import
-    'shuffle': models.shufflenet_v2_x1_0(pretrained=True),
+    'shufflenet': models.shufflenet_v2_x1_0(pretrained=True),
     'resnet': models.resnet50(pretrained=True)
 }
 
