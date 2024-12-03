@@ -862,7 +862,7 @@ class NexusScheduler:
 
         # update sessions and nodes in scheduler
         self.sessions = {}
-        for s, _ in new_sessions:
+        for s in new_sessions:
             self.sessions[s.model_name] = s
         self.nodes    = final_nodes
 
