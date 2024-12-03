@@ -182,7 +182,7 @@ def main(args):
 
     time.sleep(10)
 
-    print(f"ARGS: {args[0]})
+    print(f"ARGS: {args[0]}")
     if args[0] == '1':
         test1 = WorkloadGenerator(scheduler, model_patterns1)
         test1._start_load()
