@@ -277,7 +277,7 @@ class RequestQueue:
                 request_ids.append(request_id)
                 inputs.append(input_tensor)
                 earliest_arrival = min(earliest_arrival, arrival_time)
-                self._pending_count -= 1
+                # self._pending_count -= 1
 
             # for _ in range(available):
             #     request_id, input_tensor, arrival_time = self.queue.get_nowait()
