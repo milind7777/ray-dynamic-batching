@@ -148,13 +148,13 @@ def main():
             'type': 'slope',
             'base': 100,
             'final': 100,
-            'slope': 1
+            'slope': 4
         },
         'vit': {
             'type': 'slope',
             'base': 100,
             'final': 100,
-            'slope': 1
+            'slope': 4
         }
     }
 
