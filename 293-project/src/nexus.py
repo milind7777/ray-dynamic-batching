@@ -143,6 +143,7 @@ class nexus:
             
             by_latency = attrgetter('avg_latency_ms')
             max_batch_ind  = bisect(latency_list, s.latency_SLO/2, key=by_latency)
+            print(f"SMAX BATCH: {max_batch_ind}")
             max_batch_size, max_latency = latency_list[max_batch_ind-1]
             max_throughput = (max_batch_size/max_latency) * 1000
 
@@ -227,6 +228,7 @@ class nexus:
 
             by_latency = attrgetter('avg_latency_ms')
             max_batch_ind  = bisect(request_latency, s.latency_SLO, key=by_latency)
+            print(f"MAX BATCH: {max_batch_ind}")
             max_batch_size, max_latency = latency_list[max_batch_ind-1]
 
             # print(f"INSIDE SCHEUDLE RESIDUE")
