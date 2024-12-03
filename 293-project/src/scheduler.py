@@ -242,8 +242,7 @@ class RequestQueue:
                 self.metrics['dropped_requests'] += 1
                 return False
             
-            current_time = time.time()
-            self.queue.put((request_id, input_tensor, current_time))
+            self.queue.put((request_id, input_tensor, time.time()))
             self.metrics['total_requests'] += 1
             self.metrics['queue_size'] = self.queue.qsize()
 
@@ -278,7 +277,7 @@ class RequestQueue:
                     request_id, input_tensor, arrival_time = self.queue.get()
                     
                     # discard request if stale
-                    if (arrival_time + models_config[self.model_name]['SLO']) < (time.time() + self.profile[batch_size]['avg_latency_ms']):
+                    if (arrival_time + (models_config[self.model_name]['SLO'] / 1000)) < (time.time() + (self.profile[batch_size]['avg_latency_ms'] / 1000)):
                         discard += 1
                         continue                          
 
