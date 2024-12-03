@@ -271,13 +271,17 @@ class RequestQueue:
             
             #batch = self.queue.get_batch(available, timeout=0)
             #for (request_id, input_tensor, arrival_time) in batch:
-            for _ in range(available):
-                request_id, input_tensor, arrival_time = self.queue.get()
-                requests.append((request_id, input_tensor))
-                request_ids.append(request_id)
-                inputs.append(input_tensor)
-                earliest_arrival = min(earliest_arrival, arrival_time)
-                # self._pending_count -= 1
+            count = 0
+            while count < batch_size:
+                available = min(batch_size, self.queue.qsize())
+                for _ in range(available):
+                    request_id, input_tensor, arrival_time = self.queue.get()
+                    requests.append((request_id, input_tensor))
+                    request_ids.append(request_id)
+                    inputs.append(input_tensor)
+                    earliest_arrival = min(earliest_arrival, arrival_time)
+                    count += 1
+                    # self._pending_count -= 1
 
             # for _ in range(available):
             #     request_id, input_tensor, arrival_time = self.queue.get_nowait()
