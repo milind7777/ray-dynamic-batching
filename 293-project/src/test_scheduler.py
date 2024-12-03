@@ -132,8 +132,23 @@ def main():
     scheduler = NexusScheduler(batching_profile, monitoring_interval=1)
     scheduler.start_monitoring()
 
-    model_patterns = {
+    model_patterns1 = {
         'resnet': {
+            'type': 'slope',
+            'base': 100,
+            'final': 100,
+            'slope': 1
+        }
+    }
+
+    model_patterns2 = {
+        'resnet': {
+            'type': 'slope',
+            'base': 100,
+            'final': 100,
+            'slope': 1
+        },
+        'vit': {
             'type': 'slope',
             'base': 100,
             'final': 100,
@@ -143,8 +158,11 @@ def main():
 
     time.sleep(10)
 
-    test1 = WorkloadGenerator(scheduler, model_patterns)
-    test1._start_load()
+    # test1 = WorkloadGenerator(scheduler, model_patterns1)
+    # test1._start_load()
+
+    test2 = WorkloadGenerator(scheduler, model_patterns2)
+    test2._start_load()
 
 if __name__ == '__main__':
     main()
