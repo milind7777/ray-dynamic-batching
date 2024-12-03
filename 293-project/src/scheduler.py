@@ -533,7 +533,7 @@ class GPUWorker:
                 if len(self.sessions) == 0:
                     time.sleep(2/100)
                 
-                print(f"START")
+                # print(f"START")
                 for s, occupancy in self.sessions:
                     # print(f"GPU:WORKER:execute_schedule: looking at session {s.model_name}")
                     # calculate current time slice
