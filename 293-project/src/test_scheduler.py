@@ -56,7 +56,7 @@ class BatchProfiler:
 
 class WorkloadGenerator:
     """Generates synthetic workload for testing"""
-    def __init__(self, scheduler: NexusScheduler, model_patterns: dict = {}, pattern_period: float = 80.0):
+    def __init__(self, scheduler: NexusScheduler, model_patterns: dict = {}, pattern_period: float = 600.0):
         self.scheduler = scheduler
         self.patterns  = model_patterns
         self.pattern_period = pattern_period
