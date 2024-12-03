@@ -25,7 +25,7 @@ from nexus import (
     nexus
 )
 
-SLO_hack = 2.2
+SLO_hack = 1
 
 models_config = {
     'vit': {'SLO': 50, 'base_rate':1000},        # (model_name, SLO, initial_rate)
@@ -268,7 +268,7 @@ class RequestQueue:
             if available == 0:
                 return None
                 
-            
+            discard = 0
             #batch = self.queue.get_batch(available, timeout=0)
             #for (request_id, input_tensor, arrival_time) in batch:
             count = 0
@@ -276,6 +276,12 @@ class RequestQueue:
                 available = min(batch_size, self.queue.qsize())
                 for _ in range(available):
                     request_id, input_tensor, arrival_time = self.queue.get()
+                    
+                    # discard request if stale
+                    if (arrival_time + models_config[self.model_name]['SLO']) < (time.time() + self.profile[self.model_name][batch_size]['avg_latency_ms']):
+                        discard += 1
+                        continue                          
+
                     requests.append((request_id, input_tensor))
                     request_ids.append(request_id)
                     inputs.append(input_tensor)
@@ -306,8 +312,7 @@ class RequestQueue:
                     batch_size=len(inputs),
                     request_ids=request_ids,
                     arrival_time=earliest_arrival
-                )
-
+                ), discard
         except Empty:
             pass
         except Exception as e:
@@ -426,7 +431,7 @@ class GPUWorker:
         self.logger.info(f"Stopping worker {self.node_id}")
         self.active = False
 
-    def process_batch(self, batch: BatchRequest, request_queues: Dict[str, RequestQueue]) -> Dict:
+    def process_batch(self, batch: BatchRequest, request_queues: Dict[str, RequestQueue], discard: int = 0) -> Dict:
         """Process batch with enhanced monitoring"""
         try:
             
@@ -457,7 +462,7 @@ class GPUWorker:
                     batch, completion_time
                 )
                 
-                print(f"Process batch of size {batch.batch_size} with slo violations at: {(slo_violations / batch.batch_size) * 100}%")
+                print(f"Process batch of size {batch.batch_size} with slo violations at: {(slo_violations / batch.batch_size) * 100}% and discarded {discard} request from queue")
                 return {
                     'outputs': outputs.cpu(),
                     'request_ids': batch.request_ids,
@@ -541,11 +546,11 @@ class GPUWorker:
                     # Try to get batch from queue
                     # print(f"calling get batch for {s.model_name}")
                     # print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
-                    batch = queue.get_batch(s.batch_size)
+                    batch, discard_count = queue.get_batch(s.batch_size)
                     if batch:
                         # print(f"GPU:WORKER:execute_schedule: Valid batch found")
                         # Process batch and measure timing
-                        result = self.process_batch(batch, request_queues)
+                        result = self.process_batch(batch, request_queues, discard_count)
                         processing_time = result['processing_time']
                     
                         # Log processing metrics
