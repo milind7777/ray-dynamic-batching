@@ -772,6 +772,7 @@ class NexusScheduler:
                 rate_diff = abs(current_rate - previous_rate)
 
                 # Check if rate change exceeds threshold
+                print(f"Rate diff: {rate_diff}, previous rate: {previous_rate}")
                 if (rate_diff / previous_rate) > self.rate_change_threshold:
                     self.logger.info(f"Rate change detected for {model_name}: {current_rate:.2f} req/s")
                     
@@ -859,6 +860,10 @@ class NexusScheduler:
 
             final_nodes = [new_nodes[i-1] for i in best_arrangment]
 
+        # update sessions and nodes in scheduler
+        self.sessions = new_sessions
+        self.nodes    = final_nodes
+
         self._update_workers(final_nodes)
 
         print(f"*"*50)
@@ -873,7 +878,6 @@ class NexusScheduler:
 
         l = len(self.workers)
         n = len(new_nodes)
-        update_refs = []
         for i in range(min(l, n)):
             # print(f"NEXUSSCHEDULER:_update_worker: calling _update_schedule on worker {i}")
             # print(f"NEXUSSCHEDULER:_update_worker: {new_nodes[i].print_node_pretty()}")
