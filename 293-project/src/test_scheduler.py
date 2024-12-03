@@ -181,14 +181,14 @@ def main():
 
     time.sleep(10)
 
-    # test1 = WorkloadGenerator(scheduler, model_patterns1)
-    # test1._start_load()
+    test1 = WorkloadGenerator(scheduler, model_patterns1)
+    test1._start_load()
 
     # test2 = WorkloadGenerator(scheduler, model_patterns2)
     # test2._start_load()
 
-    test3 = WorkloadGenerator(scheduler, model_patterns3)
-    test3._start_load()
+    # test3 = WorkloadGenerator(scheduler, model_patterns3)
+    # test3._start_load()
 
 if __name__ == '__main__':
     main()
