@@ -764,6 +764,7 @@ class NexusScheduler:
                 current_rate = tracker.get_request_rate()
                 
                 if model_name not in self.sessions:
+                    print(f"REQUIRES UPDATE TRUE:{model_name} new session for model")
                     requires_update = True
                     update_info[model_name] = current_rate
                     continue
@@ -776,6 +777,7 @@ class NexusScheduler:
                 if (rate_diff / previous_rate) > self.rate_change_threshold:
                     self.logger.info(f"Rate change detected for {model_name}: {current_rate:.2f} req/s")
                     
+                    print(f"REQUIRES UPDATE TRUE:{model_name} Rate diff: {rate_diff}, previous rate: {previous_rate}")
                     requires_update = True
                     update_info[model_name] = current_rate 
                     # self._update_schedule(model_name, current_rate)
