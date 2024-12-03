@@ -146,10 +146,10 @@ class nexus:
             max_batch_size, max_latency = latency_list[max_batch_ind]
             max_throughput = (max_batch_size/max_latency) * 1000
 
-            print(f"INSIDE SCHEUDLE SATURATE")
-            print(f"MAX BATCH SIZE: {max_batch_size}")
-            print(f"REQUEST RATE: {s.request_rate}")
-            print(f"MAX LATENCY: {max_latency}")
+            # print(f"INSIDE SCHEUDLE SATURATE")
+            # print(f"MAX BATCH SIZE: {max_batch_size}")
+            # print(f"REQUEST RATE: {s.request_rate}")
+            # print(f"MAX LATENCY: {max_latency}")
 
             # decompose request rate into the form
             # R = n * Throughput + r
@@ -229,10 +229,10 @@ class nexus:
             max_batch_ind  = bisect(request_latency, s.latency_SLO, key=by_latency)
             max_batch_size, max_latency = latency_list[max_batch_ind]
 
-            print(f"INSIDE SCHEUDLE RESIDUE")
-            print(f"MAX BATCH SIZE: {max_batch_size}")
-            print(f"REQUEST RATE: {s.request_rate}")
-            print(f"MAX LATENCY: {max_latency}")
+            # print(f"INSIDE SCHEUDLE RESIDUE")
+            # print(f"MAX BATCH SIZE: {max_batch_size}")
+            # print(f"REQUEST RATE: {s.request_rate}")
+            # print(f"MAX LATENCY: {max_latency}")
 
             duty_cycle = (max_batch_size/s.request_rate) * 1000
             occupancy  = max_latency/duty_cycle
