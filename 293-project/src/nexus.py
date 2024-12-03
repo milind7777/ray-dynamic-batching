@@ -152,8 +152,8 @@ class nexus:
             by_memory = attrgetter('peak_memory_mb')
             max_batch_mem_ind = bisect(memory_list, gpu_mem, key=by_memory)
 
-            print(f"SMAX BATCH: {max_batch_ind}")
-            print(f"SMAX BATCH: {max_batch_mem_ind}")
+            # print(f"SMAX BATCH: {max_batch_ind}")
+            # print(f"SMAX BATCH: {max_batch_mem_ind}")
 
             max_batch_ind = min(max_batch_ind, max_batch_mem_ind)
 
@@ -318,8 +318,9 @@ def main():
 
     # create sessions
     sessions: list [session] = []
-    resnet_session = session('resnet', 50, 1000)
-    vit_session    = session('vit', 25, 5000)
+                            # model,   SLO, request rate
+    resnet_session = session('resnet', 50,  1000)
+    vit_session    = session('vit',    25,  5000)
 
     sessions.append(resnet_session)
     sessions.append(vit_session)

@@ -830,7 +830,7 @@ class NexusScheduler:
         return transfers
 
     def _update_schedule(self, update_info: dict):
-        print(f"UPDATE SHCEDULE CALLED")
+        # print(f"UPDATE SHCEDULE CALLED")
         new_sessions = []
         # update request rates of all old sessions
         for model, old_session in self.sessions.items():
@@ -854,7 +854,7 @@ class NexusScheduler:
         # the number of model transfers across GPUs is minimized
         l = len(old_nodes)
         n = len(new_nodes)
-        print(f"OLD NODES: {l}, NEW NODES: {n}")
+        # print(f"OLD NODES: {l}, NEW NODES: {n}")
         final_nodes = []
         if l <= n:
             numbers = range(1, n + 1)
@@ -879,11 +879,11 @@ class NexusScheduler:
             best_arrangment = None
             min_transfers   = None
             for arrangement in arrangments:
-                print(f"ARRANGEMENT: {arrangement}")
+                # print(f"ARRANGEMENT: {arrangement}")
                 current_transfers = self.get_transfers(old_nodes[:n], [new_nodes[i-1] for i in arrangement])
                 if min_transfers is None or min_transfers > current_transfers:
                     best_arrangment = arrangement
-                    print(f"UPDATED BEST ARRANGEMENT: {best_arrangment}")
+                    # print(f"UPDATED BEST ARRANGEMENT: {best_arrangment}")
                     min_transfers   = current_transfers
 
             final_nodes = [new_nodes[i-1] for i in best_arrangment]
