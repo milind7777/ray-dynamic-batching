@@ -326,6 +326,7 @@ class RequestQueue:
             self.metrics['latencies'].append(latency)
         
         self.metrics['queue_size'] = self.queue.qsize()
+        return self.metrics['slo_violations']
     
     def get_stats(self) -> Dict:
         """Get queue statistics with real latency data"""
@@ -446,10 +447,11 @@ class GPUWorker:
                 self.stats['processing_times'].append(processing_time)
 
                 # Record completion
-                request_queues[batch.model_name].record_batch_completion(
+                slo_violations = request_queues[batch.model_name].record_batch_completion(
                     batch, completion_time
                 )
                 
+                print(f"Process batch of size {batch.batch_size} with slo violations at: {(slo_violations / batch.batch_size) * 100}%")
                 return {
                     'outputs': outputs.cpu(),
                     'request_ids': batch.request_ids,
@@ -767,20 +769,25 @@ class NexusScheduler:
                     continue
 
                 if model_name not in self.sessions:
-                    print(f"REQUIRES UPDATE TRUE:{model_name} new session for model")
+                    # print(f"REQUIRES UPDATE TRUE:{model_name} new session for model")
                     requires_update = True
                     update_info[model_name] = current_rate
                     continue
 
                 previous_rate = self.sessions[model_name].request_rate
-                rate_diff = abs(current_rate - previous_rate)
+                rate_diff = current_rate - previous_rate
 
+                factor = 1
+                if rate_diff < 0:
+                    factor = 2
+
+                rate_diff = abs(rate_diff)
                 # Check if rate change exceeds threshold
-                print(f"Rate diff: {rate_diff}, previous rate: {previous_rate}")
-                if (rate_diff / previous_rate) > self.rate_change_threshold:
+                # print(f"Rate diff: {rate_diff}, previous rate: {previous_rate}")
+                if (rate_diff / previous_rate) > (self.rate_change_threshold * factor):
                     self.logger.info(f"Rate change detected for {model_name}: {current_rate:.2f} req/s")
                     
-                    print(f"REQUIRES UPDATE TRUE:{model_name} Rate diff: {rate_diff}, previous rate: {previous_rate}")
+                    # print(f"REQUIRES UPDATE TRUE:{model_name} Rate diff: {rate_diff}, previous rate: {previous_rate}")
                     requires_update = True
                     update_info[model_name] = current_rate 
                     # self._update_schedule(model_name, current_rate)
@@ -874,7 +881,7 @@ class NexusScheduler:
         self._update_workers(final_nodes)
 
         print(f"*"*50)
-        print(f"Updating to new node schedule:")
+        print(f"Updating to new node schedule at time:{time.time()}:")
         for n in final_nodes:
             n.print_node_pretty()
 
