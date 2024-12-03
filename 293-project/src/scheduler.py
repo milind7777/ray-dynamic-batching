@@ -30,7 +30,7 @@ SLO_hack = 2
 models_config = {
     'vit': {'SLO': 4000, 'base_rate':0},        # (model_name, SLO, initial_rate)
     'resnet': {'SLO': 2000, 'base_rate': 0},
-    'shufflenet': {'SLO': 30, 'base_rate': 0},
+    'shufflenet': {'SLO': 1000, 'base_rate': 0},
     'efficientnet': {'SLO': 40, 'base_rate': 0}
 }
 
@@ -545,10 +545,10 @@ class GPUWorker:
 
                     # Try to get batch from queue
                     # print(f"calling get batch for {s.model_name}")
-                    # print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
+                    print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
                     batch, discard_count = queue.get_batch(s.batch_size)
                     if batch:
-                        # print(f"GPU:WORKER:execute_schedule: Valid batch found")
+                        print(f"GPU:WORKER:execute_schedule: Valid batch found")
                         # Process batch and measure timing
                         result = self.process_batch(batch, request_queues, discard_count)
                         processing_time = result['processing_time']
