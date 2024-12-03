@@ -75,7 +75,7 @@ class WorkloadGenerator:
             for model in pattern.keys():
                 if pattern[model]['type'] == 'slope':
                     if elapsed_time < 20:
-                        rate = (elapsed_time) * pattern['slope']
+                        rate = (elapsed_time) * pattern[model]['slope']
                     # elif elapsed_time < 40:
                     #     rate = 20 * pattern['slope']
                     # elif elapsed_time < 60:
