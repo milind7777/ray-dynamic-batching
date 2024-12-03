@@ -62,7 +62,7 @@ class WorkloadGenerator:
 
     def _start_load(self):
         for model in self.patterns:
-            threading.Thread(target=self._run_pattern(model, self.patterns[model]), daemon=True).start()
+            threading.Thread(target=self._run_pattern(model, self.patterns), daemon=True).start()
 
     def _run_pattern(self, model_name: str, pattern: dict):
         start_time = time.time()
@@ -70,24 +70,26 @@ class WorkloadGenerator:
             elapsed_time = (time.time() - start_time)
             if elapsed_time > self.pattern_period:
                 break
+            
+            time_left = 1
+            for model in pattern.keys():
+                if pattern[model]['type'] == 'slope':
+                    if elapsed_time < 20:
+                        rate = (elapsed_time) * pattern['slope']
+                    # elif elapsed_time < 40:
+                    #     rate = 20 * pattern['slope']
+                    # elif elapsed_time < 60:
+                    #     rate = 20 * pattern['slope'] + (elapsed_time - 40) * pattern['slope']
+                    # elif elapsed_time < 80:
+                    #     rate = 40 * pattern['slope']
+                    
+                    second_start_time = time.time()
+                    for i in range(int(rate)):
+                        input_tensor = torch.randn(3, 224, 224)
+                        self.scheduler.submit_request(model_name, str(model_name) + str(time.time()), input_tensor)
+                    second_end_time = time.time()
 
-            if pattern['type'] == 'slope':
-                if elapsed_time < 20:
-                    rate = (elapsed_time) * pattern['slope']
-                # elif elapsed_time < 40:
-                #     rate = 20 * pattern['slope']
-                # elif elapsed_time < 60:
-                #     rate = 20 * pattern['slope'] + (elapsed_time - 40) * pattern['slope']
-                # elif elapsed_time < 80:
-                #     rate = 40 * pattern['slope']
-                
-                second_start_time = time.time()
-                for i in range(int(rate)):
-                    input_tensor = torch.randn(3, 224, 224)
-                    self.scheduler.submit_request(model_name, str(model_name) + str(time.time()), input_tensor)
-                second_end_time = time.time()
-
-            time_left = 1 - (second_end_time - second_start_time)
+                time_left = time_left - (second_end_time - second_start_time)
             # print(f"Time it took to send register requests: {second_end_time - second_start_time}")
             if time_left>0:
                 time.sleep(time_left)
