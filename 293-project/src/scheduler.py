@@ -763,6 +763,9 @@ class NexusScheduler:
             for model_name, tracker in self.request_trackers.items():
                 current_rate = tracker.get_request_rate()
                 
+                if current_rate == 0:
+                    continue
+
                 if model_name not in self.sessions:
                     print(f"REQUIRES UPDATE TRUE:{model_name} new session for model")
                     requires_update = True
