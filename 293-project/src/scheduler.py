@@ -874,7 +874,7 @@ class NexusScheduler:
                     final_nodes.append(new_nodes[i-1])
         else:
             numbers = range(1, n + 1)
-            arrangments = list(itertools.permutations(numbers, l))
+            arrangments = list(itertools.permutations(numbers, n))
 
             best_arrangment = None
             min_transfers   = None
