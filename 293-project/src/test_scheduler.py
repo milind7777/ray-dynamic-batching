@@ -188,6 +188,7 @@ def main():
     # test2._start_load()
 
     test3 = WorkloadGenerator(scheduler, model_patterns3)
+    test3._start_load()
 
 if __name__ == '__main__':
     main()
