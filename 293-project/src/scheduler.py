@@ -286,7 +286,7 @@ class RequestQueue:
             #     inputs.append(input_tensor)
             #     earliest_arrival = min(earliest_arrival, arrival_time)
             #     self._pending_count -= 1'''
-            batch = self.queue.get_nowait_batch(available)
+            batch = self.queue.get_batch(available)
             if not batch:
                 return None
             
