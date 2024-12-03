@@ -29,7 +29,7 @@ SLO_hack = 1.5
 
 models_config = {
     'vit': {'SLO': 50, 'base_rate':1000},        # (model_name, SLO, initial_rate)
-    'resnet': {'SLO': 200, 'base_rate': 2000},
+    'resnet': {'SLO': 400, 'base_rate': 2000},
     'shufflenet': {'SLO': 30, 'base_rate': 1500},
     'efficientnet': {'SLO': 40, 'base_rate': 1200}
 }
