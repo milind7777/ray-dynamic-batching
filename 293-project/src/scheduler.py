@@ -276,6 +276,7 @@ class RequestQueue:
                 for _ in range(available):
                     request_id, input_tensor, arrival_time = self.queue.get()
                     
+                    print(f"PROCESSING BATCH: {available}")
                     # discard request if stale
                     if (arrival_time + (models_config[self.model_name]['SLO'] / 1000)) < (time.time() + (self.profile[batch_size]['avg_latency_ms'] / 1000)):
                         discard += 1
@@ -303,7 +304,8 @@ class RequestQueue:
             #     request_ids.append(rid)
             #     inputs.append(tensor)
             #     earliest_arrival = min(earliest_arrival, arrival_time)
-                    
+                
+            print(f"RETURNING FINAL BATCH")
             if inputs:
                 return BatchRequest(
                     model_name=self.model_name,
