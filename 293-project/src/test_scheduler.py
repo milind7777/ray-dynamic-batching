@@ -22,7 +22,7 @@ from pathlib import Path
 models_config = {
     'vit': {'SLO': 4000, 'base_rate':0},        # (model_name, SLO, initial_rate)
     'resnet': {'SLO': 2000, 'base_rate': 0},
-    'shufflenet': {'SLO': 30, 'base_rate': 0},
+    'shufflenet': {'SLO': 1000, 'base_rate': 0},
     'efficientnet': {'SLO': 40, 'base_rate': 0}
 }
 
@@ -158,13 +158,36 @@ def main():
         }
     }
 
+    model_patterns3 = {
+        'resnet': {
+            'type': 'slope',
+            'base': 100,
+            'final': 100,
+            'slope': 1
+        },
+        'vit': {
+            'type': 'slope',
+            'base': 100,
+            'final': 100,
+            'slope': 1
+        },
+        'shufflenet': {
+            'type': 'slope',
+            'base': 100,
+            'final': 100,
+            'slope': 1
+        }
+    }
+
     time.sleep(10)
 
     # test1 = WorkloadGenerator(scheduler, model_patterns1)
     # test1._start_load()
 
-    test2 = WorkloadGenerator(scheduler, model_patterns2)
-    test2._start_load()
+    # test2 = WorkloadGenerator(scheduler, model_patterns2)
+    # test2._start_load()
+
+    test3 = WorkloadGenerator(scheduler, model_patterns3)
 
 if __name__ == '__main__':
     main()
