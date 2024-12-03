@@ -566,7 +566,8 @@ class GPUWorker:
                 if not self._check_for_updates(update_queue):
                     # wait for duty cycle to finish
                     current_time    = time.time()
-                    remaining_cycle = current_time - (cycle_start_time + (total_time / 1000)) 
+                    remaining_cycle = current_time - (cycle_start_time + (total_time / 1000))
+                    print(f"Going to sleep of time: {remaining_cycle}")
                     if remaining_cycle > 0:
                         # print(f"GPU:WORKER:execute_schedule: Going to sleep for {remaining_cycle}")
                         time.sleep(remaining_cycle)
