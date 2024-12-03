@@ -278,7 +278,7 @@ class RequestQueue:
                     request_id, input_tensor, arrival_time = self.queue.get()
                     
                     # discard request if stale
-                    if (arrival_time + models_config[self.model_name]['SLO']) < (time.time() + self.profile[self.model_name][batch_size]['avg_latency_ms']):
+                    if (arrival_time + models_config[self.model_name]['SLO']) < (time.time() + self.profile[batch_size]['avg_latency_ms']):
                         discard += 1
                         continue                          
 
