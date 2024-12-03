@@ -182,13 +182,14 @@ def main(args):
 
     time.sleep(10)
 
-    if args[1] == '1':
+    print(f"ARGS: {args[0]})
+    if args[0] == '1':
         test1 = WorkloadGenerator(scheduler, model_patterns1)
         test1._start_load()
-    elif args[1] == '2':
+    elif args[0] == '2':
         test2 = WorkloadGenerator(scheduler, model_patterns2)
         test2._start_load()
-    elif args[1] == '3':
+    elif args[0] == '3':
         test3 = WorkloadGenerator(scheduler, model_patterns3)
         test3._start_load()
 
