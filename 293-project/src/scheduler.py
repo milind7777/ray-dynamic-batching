@@ -25,7 +25,7 @@ from nexus import (
     nexus
 )
 
-SLO_hack = 1
+SLO_hack = 1.5
 
 models_config = {
     'vit': {'SLO': 50, 'base_rate':1000},        # (model_name, SLO, initial_rate)
@@ -271,7 +271,7 @@ class RequestQueue:
             #batch = self.queue.get_batch(available, timeout=0)
             #for (request_id, input_tensor, arrival_time) in batch:
             count = 0
-            while count < batch_size:
+            while count <= batch_size:
                 available = min(batch_size, self.queue.qsize())
                 for _ in range(available):
                     request_id, input_tensor, arrival_time = self.queue.get()
