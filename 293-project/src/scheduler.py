@@ -265,7 +265,7 @@ class RequestQueue:
         try:
             available = min(batch_size, self.queue.qsize())
             if available == 0:
-                return None
+                return None, 0
                 
             discard = 0
             #batch = self.queue.get_batch(available, timeout=0)
@@ -317,7 +317,7 @@ class RequestQueue:
         except Exception as e:
             self._logger.error(f"Error creating batch: {e}")
             
-        return None
+        return None, 0
     
     def record_batch_completion(self, batch: BatchRequest, completion_time: float):
         """Record batch completion metrics with enhanced tracking"""
