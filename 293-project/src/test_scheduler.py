@@ -88,7 +88,7 @@ class WorkloadGenerator:
                 second_end_time = time.time()
 
             time_left = 1 - (second_end_time - second_start_time)
-            print(f"Time it took to send register requests: {second_end_time - second_start_time}")
+            # print(f"Time it took to send register requests: {second_end_time - second_start_time}")
             if time_left>0:
                 time.sleep(time_left)
         

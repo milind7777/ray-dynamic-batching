@@ -861,6 +861,8 @@ class NexusScheduler:
 
         self._update_workers(final_nodes)
 
+        print(f"*"*50)
+        print(f"Updating to new node schedule:")
         for n in final_nodes:
             n.print_node_pretty()
 
