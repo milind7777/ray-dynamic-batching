@@ -28,7 +28,7 @@ from nexus import (
 SLO_hack = 2
 
 models_config = {
-    'vit': {'SLO': 50, 'base_rate':0},        # (model_name, SLO, initial_rate)
+    'vit': {'SLO': 600, 'base_rate':0},        # (model_name, SLO, initial_rate)
     'resnet': {'SLO': 400, 'base_rate': 0},
     'shufflenet': {'SLO': 30, 'base_rate': 0},
     'efficientnet': {'SLO': 40, 'base_rate': 0}
