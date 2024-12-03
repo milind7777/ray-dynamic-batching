@@ -276,7 +276,7 @@ class RequestQueue:
                 for _ in range(available):
                     request_id, input_tensor, arrival_time = self.queue.get()
                     
-                    print(f"PROCESSING BATCH: {available}")
+                    # print(f"PROCESSING BATCH: {available}")
                     # discard request if stale
                     if (arrival_time + (models_config[self.model_name]['SLO'] / 1000)) < (time.time() + (self.profile[batch_size]['avg_latency_ms'] / 1000)):
                         discard += 1
@@ -305,7 +305,7 @@ class RequestQueue:
             #     inputs.append(tensor)
             #     earliest_arrival = min(earliest_arrival, arrival_time)
                 
-            print(f"RETURNING FINAL BATCH")
+            # print(f"RETURNING FINAL BATCH")
             if inputs:
                 return BatchRequest(
                     model_name=self.model_name,
@@ -547,10 +547,10 @@ class GPUWorker:
 
                     # Try to get batch from queue
                     # print(f"calling get batch for {s.model_name}")
-                    print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
+                    # print(f"GPU:WORKER:execute_schedule: Getting batch of size {s.batch_size}")
                     batch, discard_count = queue.get_batch(s.batch_size)
                     if batch:
-                        print(f"GPU:WORKER:execute_schedule: Valid batch found")
+                        # print(f"GPU:WORKER:execute_schedule: Valid batch found")
                         # Process batch and measure timing
                         result = self.process_batch(batch, request_queues, discard_count)
                         processing_time = result['processing_time']
