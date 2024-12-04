@@ -25,7 +25,7 @@ from nexus import (
     nexus
 )
 
-SLO_hack = 2.4
+SLO_hack = 2.2
 
 models_config = {
     'vit': {'SLO': 4000, 'base_rate':0},        # (model_name, SLO, initial_rate)
