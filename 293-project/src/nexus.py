@@ -7,6 +7,13 @@ import math, copy
 
 gpu_mem = 11
 
+models_config = {
+    'vit': {'SLO': 4000, 'base_rate':0},        # (model_name, SLO, initial_rate)
+    'resnet': {'SLO': 2000, 'base_rate': 0},
+    'shufflenet': {'SLO': 1500, 'base_rate': 0},
+    'efficientnet': {'SLO': 40, 'base_rate': 0}
+}
+
 class session:
     """
     Session class representing a model deployment request
@@ -47,7 +54,7 @@ class session:
         self.creation_time = datetime.now()
 
     def print_session_pretty(self):
-        print(f"Model name: {self.model_name}, SLO: {round(self.latency_SLO, 0)}ms, "
+        print(f"Model name: {self.model_name}, SLO: {round(models_config[self.model_name]['SLO'], 0)}ms, "
               f"request rate: {round(self.request_rate, 0)}, batch size: {self.batch_size}")
 
     def to_dict(self) -> dict:
